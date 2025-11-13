@@ -1,0 +1,73 @@
+# Emberleaf Configuration
+# This file will be automatically created at:
+# - Linux: ~/.config/Emberleaf/config.toml
+# - macOS: ~/Library/Preferences/Emberleaf/config.toml
+# - Windows: %APPDATA%\Emberleaf\config\config.toml
+
+[audio]
+# Target sample rate for all audio processing
+sample_rate_hz = 16000
+
+# Frame duration in milliseconds (20ms = 320 samples @ 16kHz)
+frame_ms = 20
+
+# Hop duration in milliseconds (10ms = 160 samples @ 16kHz)
+hop_ms = 10
+
+[kws]
+# Wake word keyword
+keyword = "hey ember"
+
+# Detection score threshold (0.0-1.0)
+# Lower = more sensitive (more false positives)
+# Higher = less sensitive (fewer false positives)
+score_threshold = 0.60
+
+# Refractory period in milliseconds
+# Prevents duplicate detections within this window
+refractory_ms = 1200
+
+# Endpoint detection timeout in milliseconds
+# How long to wait after keyword ends before resetting
+endpoint_ms = 300
+
+# ONNX Runtime provider (cpu, cuda, coreml, etc.)
+provider = "cpu"
+
+# Maximum active paths for beam search
+max_active_paths = 4
+
+# Enable/disable wake-word detection
+enabled = true
+
+[vad]
+# Enable Voice Activity Detection (reduces false positives)
+enable = true
+
+# VAD mode (currently only "silero" supported)
+mode = "silero"
+
+# Energy threshold for VAD (higher = more strict)
+# Typical range: 100.0 - 2000.0
+threshold = 500.0
+
+[biometrics]
+# Minimum number of enrollment utterances
+enroll_utterances_min = 3
+
+# Minimum duration per utterance (milliseconds)
+utterance_min_ms = 2000
+
+# Cosine similarity threshold for verification (0.0-1.0)
+# Higher = more strict (fewer false accepts)
+verify_threshold = 0.82
+
+# Maximum verification duration (milliseconds)
+max_verify_ms = 4000
+
+[ui]
+# Minimum contrast ratio for focus rings (WCAG AAA)
+focus_ring_contrast_min = 3.0
+
+# Minimum touch target size in pixels (WCAG AAA)
+min_touch_target_px = 32

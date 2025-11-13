@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Emberleaf color palette */
+    --gold-leaf: 37 61% 44%; /* #B88A2B */
+    --amber-glow: 31 74% 56%; /* #E49A3A */
+    --charcoal-ink: 210 11% 11%; /* #171A1C */
+    --parchment: 48 67% 95%; /* #F6F1E7 */
+
+    /* Semantic colors based on Emberleaf palette */
+    --background: var(--charcoal-ink);
+    --foreground: var(--parchment);
+
+    --primary: var(--amber-glow);
+    --primary-foreground: var(--charcoal-ink);
+
+    --secondary: 210 11% 20%;
+    --secondary-foreground: var(--parchment);
+
+    --muted: 210 11% 18%;
+    --muted-foreground: 48 20% 70%;
+
+    --accent: var(--gold-leaf);
+    --accent-foreground: var(--parchment);
+
+    --destructive: 0 62% 48%;
+    --destructive-foreground: var(--parchment);
+
+    --border: 210 11% 25%;
+    --input: 210 11% 25%;
+    --ring: var(--amber-glow);
+
+    --card: 210 11% 13%;
+    --card-foreground: var(--parchment);
+
+    --popover: 210 11% 15%;
+    --popover-foreground: var(--parchment);
+
+    --radius: 0.5rem;
+
+    /* Font settings */
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
+      Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+    line-height: 1.6;
+    font-weight: 400;
+
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  * {
+    border-color: hsl(var(--border));
+  }
+
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    margin: 0;
+    min-width: 320px;
+    min-height: 100vh;
+  }
+
+  #root {
+    width: 100%;
+    min-height: 100vh;
+  }
+}

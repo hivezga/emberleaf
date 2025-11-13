@@ -1,0 +1,304 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main, dev]
+    tags: ["v*"]
+  pull_request:
+    branches: [main, dev]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  # ===== Quick Validation (Fast Gate) =====
+  quick-validation:
+    name: Quick Validation (Rust unit subset)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Unit tests (validation module)
+        run: cargo test -q --manifest-path src-tauri/Cargo.toml validation
+
+  # ===== Lint Job =====
+  lint:
+    name: Lint (TypeScript + Rust)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Lint TypeScript
+        run: npm run lint
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            src-tauri/target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Check Rust formatting
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+
+      - name: Run Clippy
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings -A unknown-lints
+
+  # ===== Test Web Job =====
+  test-web:
+    name: Test (Frontend)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm run ci:test
+
+  # ===== Check Rust Job =====
+  check-rust:
+    name: Check (Rust)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            src-tauri/target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libasound2-dev \
+            libpulse-dev
+
+      - name: Check Rust code
+        run: cargo check --manifest-path src-tauri/Cargo.toml --all-targets --all-features
+
+  # ===== Security Audit (Rust) =====
+  audit-rust:
+    name: Security Audit (Rust)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+
+      - name: Run cargo audit
+        run: cargo audit --deny warnings || true
+        continue-on-error: true
+
+  # ===== Security Audit (npm) =====
+  audit-npm:
+    name: Security Audit (npm)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run npm audit
+        run: npm audit --audit-level=high || true
+        continue-on-error: true
+
+  # ===== Secret Scanning =====
+  scan-secrets:
+    name: Scan for Secrets
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Scan for common secret patterns
+        run: |
+          echo "Scanning for potential secrets..."
+          if grep -rE "(api[_-]?key|password|secret|token|bearer)" --include="*.rs" --include="*.ts" --include="*.tsx" --include="*.json" . || \
+             grep -rE "AKIA[0-9A-Z]{16}" . || \
+             grep -rE "ghp_[0-9a-zA-Z]{36}" . || \
+             grep -rE "sk_live_[0-9a-zA-Z]{24,}" .; then
+            echo "⚠️  Potential secrets detected - please review"
+            exit 0  # Non-fatal for now
+          else
+            echo "✅ No obvious secrets found"
+          fi
+
+  # ===== XSS Safety Check =====
+  check-xss:
+    name: Check XSS Safety
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Scan for dangerouslySetInnerHTML
+        run: |
+          if grep -r "dangerouslySetInnerHTML" src/ --include="*.tsx" --include="*.ts"; then
+            echo "❌ Found dangerouslySetInnerHTML - XSS risk!"
+            exit 1
+          else
+            echo "✅ No dangerouslySetInnerHTML found"
+          fi
+
+  # ===== Build Linux (Tags Only) =====
+  build-linux:
+    name: Build Linux (AppImage + .deb)
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [lint, test-web, check-rust]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            src-tauri/target/
+          key: ${{ runner.os }}-cargo-release-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-release-
+            ${{ runner.os }}-cargo-
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libasound2-dev \
+            libpulse-dev
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Package Linux artifacts
+        run: npm run package:linux
+
+      - name: Generate SHA256 checksums
+        run: |
+          cd dist
+          sha256sum *.{AppImage,deb} > SHASUMS256.txt
+          cat SHASUMS256.txt
+
+      - name: Verify checksums
+        run: |
+          cd dist
+          sha256sum --check SHASUMS256.txt
+          echo "✅ All artifacts verified against checksums"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-artifacts
+          path: |
+            dist/*.AppImage
+            dist/*.deb
+            dist/SHASUMS256.txt
+          retention-days: 30
+
+      - name: Create release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.AppImage
+            dist/*.deb
+            dist/SHASUMS256.txt
+          generate_release_notes: true
+          draft: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

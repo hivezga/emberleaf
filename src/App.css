@@ -1,0 +1,69 @@
+.container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+h1 {
+  color: #B88A2B;
+  margin-bottom: 2rem;
+  font-size: 2.5rem;
+}
+
+.status {
+  background: #1f2426;
+  border: 1px solid #B88A2B;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.status p {
+  font-size: 1.2rem;
+}
+
+.status strong {
+  color: #E49A3A;
+}
+
+.detections {
+  margin-top: 2rem;
+}
+
+.detections h2 {
+  color: #B88A2B;
+  margin-bottom: 1rem;
+  font-size: 1.5rem;
+}
+
+.detections ul {
+  list-style: none;
+}
+
+.detections li {
+  background: #1f2426;
+  border-left: 3px solid #B88A2B;
+  padding: 1rem;
+  margin-bottom: 0.5rem;
+  border-radius: 4px;
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.time {
+  color: #888;
+  font-size: 0.9rem;
+  min-width: 100px;
+}
+
+.keyword {
+  color: #E49A3A;
+  font-weight: 600;
+  flex: 1;
+}
+
+.score {
+  color: #B88A2B;
+  font-family: 'Courier New', monospace;
+}

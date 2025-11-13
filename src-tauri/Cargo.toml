@@ -1,0 +1,81 @@
+[package]
+name = "ember"
+version = "0.1.0"
+description = "Emberleaf - Private Local Voice Assistant"
+authors = ["Lotus Ember Labs"]
+edition = "2021"
+
+[lib]
+name = "ember_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "ember"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2.0.0", features = [] }
+bindgen = "0.70"
+cc = "1.0"
+
+[dependencies]
+tauri = { version = "2.0.0", features = [] }
+tauri-plugin-shell = "2.0.0"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Audio capture
+cpal = "0.15"
+ringbuf = "0.4"
+
+# ONNX Runtime for Sherpa-ONNX models
+ort = { version = "2.0.0-rc.10", features = ["download-binaries"] }
+
+# Crypto for model integrity
+sha2 = "0.10"
+ed25519-dalek = { version = "2.1", features = ["rand_core"] }
+
+# Config and paths
+toml = "0.8"
+directories = "5.0"
+
+# Error handling and logging
+anyhow = "1.0"
+thiserror = "1.0"
+log = "0.4"
+env_logger = "0.11"
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+tokio-stream = "0.1"
+
+# Resampling (if input is not 16kHz)
+rubato = "0.15"
+
+# Crypto for voiceprint encryption (BE-002)
+chacha20poly1305 = "0.10"
+rand_core = "0.6"
+zeroize = { version = "1.7", features = ["derive"] }
+
+# Date/time for voiceprint timestamps
+chrono = "0.4"
+
+# Thread-safe channels for audio workers
+crossbeam-channel = "0.5"
+
+# Conditional compilation
+cfg-if = "1.0"
+
+[dev-dependencies]
+proptest = "1"
+
+[features]
+default = ["custom-protocol"]   # Stub KWS is default - no Sherpa required
+custom-protocol = ["tauri/custom-protocol"]
+kws_real = []  # Enable real Sherpa-ONNX KWS (BE-001C) - opt-in
+devtools = ["tauri/devtools"]  # Enable devtools (debug builds only)
+
+[profile.dev]
+# Enable devtools in debug builds
+[profile.dev.package.ember]
+features = ["devtools"]

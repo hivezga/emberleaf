@@ -1,0 +1,43 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./patch_all_cmake.sh:*)",
+      "Bash(make:*)",
+      "Bash(export SHERPA_ONNX_DIR=/home/hivezga/.local/sherpa-onnx)",
+      "Bash(export LD_LIBRARY_PATH=/home/hivezga/.local/sherpa-onnx/lib:$LD_LIBRARY_PATH:*)",
+      "Bash(cargo clean:*)",
+      "Bash(tee:*)",
+      "Bash(nm:*)",
+      "Bash(curl:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(export SHERPA_ONNX_DIR=\"$HOME/.local/sherpa-onnx\")",
+      "Bash(export LD_LIBRARY_PATH:*)",
+      "Bash(source:*)",
+      "Bash(SHERPA_ONNX_DIR=\"/home/hivezga/.local/sherpa-onnx\" LD_LIBRARY_PATH=\"/home/hivezga/.local/sherpa-onnx/lib:$LD_LIBRARY_PATH\" cargo build:*)",
+      "Bash(SHERPA_ONNX_DIR=\"/home/hivezga/.local/sherpa-onnx\" LD_LIBRARY_PATH=\"/home/hivezga/.local/sherpa-onnx/lib\" cargo build:*)",
+      "Bash(SHERPA_ONNX_DIR=\"/home/hivezga/.local/sherpa-onnx\" LD_LIBRARY_PATH=\"/home/hivezga/.local/sherpa-onnx/lib\" npm run tauri:*)",
+      "Bash(pkill:*)",
+      "Bash(pacman -Q:*)",
+      "Bash(journalctl:*)",
+      "WebSearch",
+      "Bash(GDK_BACKEND=x11 SHERPA_ONNX_DIR=\"/home/hivezga/.local/sherpa-onnx\" LD_LIBRARY_PATH=\"/home/hivezga/.local/sherpa-onnx/lib\" npm run tauri dev:*)",
+      "Bash(test:*)",
+      "Bash(/home/hivezga/.local/share/Emberleaf/models/kws/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01/keywords.txt)",
+      "Bash(ln:*)",
+      "Bash(SHERPA_ONNX_DIR=\"/home/hivezga/.local/sherpa-onnx\" LD_LIBRARY_PATH=\"/home/hivezga/.local/sherpa-onnx/lib\" cargo check:*)",
+      "Bash(SHERPA_ONNX_DIR=\"/home/hivezga/.local/sherpa-onnx\" LD_LIBRARY_PATH=\"/home/hivezga/.local/sherpa-onnx/lib\" npm run tauri:trace:*)",
+      "Bash(npm search:*)",
+      "Bash(env SHERPA_ONNX_DIR=/home/hivezga/.local/sherpa-onnx LD_LIBRARY_PATH=/home/hivezga/.local/sherpa-onnx/lib cargo check:*)",
+      "Bash(npm install:*)",
+      "Bash(npx tailwindcss:*)",
+      "Bash(./node_modules/.bin/tailwindcss:*)",
+      "Bash(npm run build:*)",
+      "Bash(echo:*)",
+      "Bash(pactl list:*)",
+      "Bash(cat:*)",
+      "Bash(chmod:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

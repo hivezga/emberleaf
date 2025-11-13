@@ -6,7 +6,6 @@
 
 use anyhow::Result;
 use crossbeam_channel::{bounded, Receiver, Sender};
-use std::sync::Arc;
 
 use crate::audio::kws::KwsConfig;
 use crate::audio::kws::KwsWorker;
@@ -40,20 +39,68 @@ impl AudioRuntime {
 
         // Start KWS worker if enabled
         let kws_worker = if kws_cfg.enabled {
-            match KwsWorker::start(
-                app_handle.clone(),
-                paths.clone(),
-                kws_cfg.clone(),
-                vad_cfg.clone(),
-                audio_cfg.clone(),
-            ) {
-                Ok(worker) => {
-                    log::info!("✓ Audio runtime started with wake-word detection");
-                    Some(worker)
+            // Check mode: "real" or "stub"
+            if kws_cfg.mode == "real" {
+                #[cfg(feature = "kws_real")]
+                {
+                    if let Some(ref model_id) = kws_cfg.model_id {
+                        log::info!("Starting real KWS with model: {}", model_id);
+                        match crate::audio::kws::real::KwsWorker::start(
+                            app_handle.clone(),
+                            paths.clone(),
+                            kws_cfg.clone(),
+                            vad_cfg.clone(),
+                            audio_cfg.clone(),
+                            model_id.clone(),
+                        ) {
+                            Ok(worker) => {
+                                log::info!("✓ Audio runtime started with real KWS");
+                                Some(KwsWorker::Real(worker))
+                            }
+                            Err(e) => {
+                                log::warn!("Real KWS failed, falling back to stub: {}", e);
+                                // Fall back to stub
+                                match KwsWorker::start_stub(
+                                    app_handle.clone(),
+                                    paths,
+                                    kws_cfg,
+                                    vad_cfg,
+                                    audio_cfg,
+                                ) {
+                                    Ok(stub_worker) => {
+                                        log::info!("✓ Audio runtime started with stub KWS (fallback)");
+                                        Some(stub_worker)
+                                    }
+                                    Err(stub_err) => {
+                                        log::error!("Failed to start stub KWS: {}", stub_err);
+                                        None
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        log::warn!("Real KWS mode requested but no model_id provided, using stub");
+                        match KwsWorker::start_stub(
+                            app_handle.clone(),
+                            paths,
+                            kws_cfg,
+                            vad_cfg,
+                            audio_cfg,
+                        ) {
+                            Ok(stub_worker) => {
+                                log::info!("✓ Audio runtime started with stub KWS");
+                                Some(stub_worker)
+                            }
+                            Err(e) => {
+                                log::error!("Failed to start stub KWS: {}", e);
+                                None
+                            }
+                        }
+                    }
                 }
-                Err(e) => {
-                    log::warn!("Real KWS failed, trying stub: {}", e);
-                    // Try stub as fallback
+                #[cfg(not(feature = "kws_real"))]
+                {
+                    log::warn!("Real KWS requested but feature not enabled, using stub");
                     match KwsWorker::start_stub(
                         app_handle.clone(),
                         paths,
@@ -65,10 +112,29 @@ impl AudioRuntime {
                             log::info!("✓ Audio runtime started with stub KWS");
                             Some(stub_worker)
                         }
-                        Err(stub_err) => {
-                            log::error!("Failed to start even stub KWS: {}", stub_err);
+                        Err(e) => {
+                            log::error!("Failed to start stub KWS: {}", e);
                             None
                         }
+                    }
+                }
+            } else {
+                // Stub mode (default)
+                log::info!("Starting stub KWS");
+                match KwsWorker::start_stub(
+                    app_handle.clone(),
+                    paths,
+                    kws_cfg,
+                    vad_cfg,
+                    audio_cfg,
+                ) {
+                    Ok(stub_worker) => {
+                        log::info!("✓ Audio runtime started with stub KWS");
+                        Some(stub_worker)
+                    }
+                    Err(e) => {
+                        log::error!("Failed to start stub KWS: {}", e);
+                        None
                     }
                 }
             }

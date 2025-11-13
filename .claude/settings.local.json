@@ -35,7 +35,10 @@
       "Bash(echo:*)",
       "Bash(pactl list:*)",
       "Bash(cat:*)",
-      "Bash(chmod:*)"
+      "Bash(chmod:*)",
+      "Bash(git checkout:*)",
+      "Bash(cargo check:*)",
+      "Bash(git add:*)"
     ],
     "deny": [],
     "ask": []

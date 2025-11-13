@@ -5,15 +5,22 @@
 
 import { useEffect, useState, useRef } from "react";
 import { toast } from "sonner";
-import { Mic, Volume2, AlertCircle, CheckCircle, AlertTriangle } from "lucide-react";
+import { Mic, Volume2, AlertCircle, CheckCircle, AlertTriangle, Brain } from "lucide-react";
 import { Button } from "./ui/button";
+import { Badge } from "./ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./ui/card";
 import { useI18n, format } from "../lib/i18n";
 import {
   suggestInputDevice,
   playTestTone,
   currentInputDevice,
+  kwsStatus,
+  kwsEnable,
+  kwsListModels,
+  subscribeKwsEvents,
   type ProbeResult,
+  type KwsStatus,
+  type KwsModelEntry,
 } from "../lib/tauriSafe";
 
 interface MicMeterProps {
@@ -52,6 +59,11 @@ export function SimpleAudioHome({ onChangeMicrophone }: { onChangeMicrophone: ()
   const [currentDevice, setCurrentDevice] = useState<string | null>(null);
   const [probing, setProbing] = useState(false);
   const [lastProbe, setLastProbe] = useState<ProbeResult | null>(null);
+
+  // KWS state
+  const [kwsStat, setKwsStat] = useState<KwsStatus | null>(null);
+  const [kwsModels, setKwsModels] = useState<KwsModelEntry[]>([]);
+  const [kwsEnabling, setKwsEnabling] = useState(false);
 
   // Smoothing parameters
   const smoothingAlpha = 0.3; // EMA smoothing factor
@@ -105,6 +117,9 @@ export function SimpleAudioHome({ onChangeMicrophone }: { onChangeMicrophone: ()
   // Load current device on mount
   useEffect(() => {
     loadCurrentDevice();
+    loadKwsStatus();
+    loadKwsModels();
+    setupKwsEvents();
   }, []);
 
   async function loadCurrentDevice() {
@@ -146,6 +161,76 @@ export function SimpleAudioHome({ onChangeMicrophone }: { onChangeMicrophone: ()
     } catch (err) {
       toast.error(`${t.error}: ${err}`);
     }
+  }
+
+  // KWS functions
+  async function loadKwsStatus() {
+    try {
+      const status = await kwsStatus();
+      setKwsStat(status);
+    } catch (err) {
+      console.error("Failed to load KWS status:", err);
+    }
+  }
+
+  async function loadKwsModels() {
+    try {
+      const models = await kwsListModels();
+      setKwsModels(models);
+    } catch (err) {
+      console.error("Failed to load KWS models:", err);
+    }
+  }
+
+  async function setupKwsEvents() {
+    try {
+      await subscribeKwsEvents({
+        onEnabled: (_modelId) => {
+          toast.success(t.kws.enabledToast);
+          setKwsEnabling(false);
+          loadKwsStatus();
+        },
+        onDisabled: () => {
+          toast.info(t.kws.disabledToast);
+          loadKwsStatus();
+        },
+        onModelVerifyFailed: () => {
+          setKwsEnabling(false);
+        },
+      });
+    } catch (err) {
+      console.log("KWS events not available (web mode)");
+    }
+  }
+
+  async function handleEnableKws() {
+    if (kwsModels.length === 0) {
+      toast.error(t.kws.noModels);
+      return;
+    }
+
+    // Auto-select: prefer Spanish, otherwise first model
+    const spanishModel = kwsModels.find(m => m.lang === "es");
+    const modelToUse = spanishModel || kwsModels[0];
+    const modelId = extractModelId(modelToUse.description);
+
+    if (spanishModel) {
+      toast.info(t.kws.autoChoiceNote);
+    }
+
+    setKwsEnabling(true);
+    try {
+      await kwsEnable(modelId);
+      // Success handled by event
+    } catch (err) {
+      toast.error(`${t.error}: ${err}`);
+      setKwsEnabling(false);
+    }
+  }
+
+  function extractModelId(description: string): string {
+    const match = description.match(/^([^\s(]+)/);
+    return match ? match[1] : description;
   }
 
   // Determine status (use smoothed level for stability)
@@ -216,6 +301,48 @@ export function SimpleAudioHome({ onChangeMicrophone }: { onChangeMicrophone: ()
             {t.playTestSound}
           </Button>
         </div>
+
+        {/* KWS Simple Section */}
+        {kwsStat && kwsStat.mode === "stub" && (
+          <div className="pt-4 border-t space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Brain className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium">{t.kws.title}</span>
+              </div>
+              <Badge variant="secondary">{t.kws.statusStub}</Badge>
+            </div>
+            <Button
+              variant="default"
+              size="sm"
+              onClick={handleEnableKws}
+              disabled={kwsEnabling || kwsModels.length === 0}
+              className="w-full"
+            >
+              <Brain className="h-4 w-4 mr-2" />
+              {kwsEnabling ? t.kws.downloading : t.kws.simpleCta}
+            </Button>
+            {kwsModels.length > 0 && (
+              <p className="text-xs text-muted-foreground text-center">
+                {t.kws.autoChoiceNote}
+              </p>
+            )}
+          </div>
+        )}
+
+        {kwsStat && kwsStat.mode === "real" && (
+          <div className="pt-4 border-t">
+            <div className="flex items-center gap-2 text-sm">
+              <Brain className="h-4 w-4 text-green-600" />
+              <span className="font-medium">{t.kws.statusReal}</span>
+              {kwsStat.model_id && (
+                <Badge variant="default" className="text-xs">
+                  {kwsStat.model_id}
+                </Badge>
+              )}
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

@@ -161,6 +161,29 @@ export interface Translations {
     device_not_found: string;
     unknown_error: string;
   };
+
+  // KWS (Keyword Spotting) - KWS-REAL-001-UI
+  kws: {
+    title: string;
+    statusStub: string;
+    statusReal: string;
+    currentModel: string;
+    selectModel: string;
+    enable: string;
+    disable: string;
+    downloading: string;
+    verifying: string;
+    verified: string;
+    verifyFailed: string;
+    enabledToast: string;
+    disabledToast: string;
+    simpleCta: string;
+    noModels: string;
+    autoChoiceNote: string;
+    modelLang: string;
+    modelSize: string;
+    downloadProgress: string;
+  };
 }
 
 export const translations: Record<Language, Translations> = {
@@ -320,6 +343,29 @@ export const translations: Record<Language, Translations> = {
       device_not_found: "Selected device was not found.",
       unknown_error: "An unexpected error occurred.",
     },
+
+    // KWS (Keyword Spotting) - KWS-REAL-001-UI
+    kws: {
+      title: "Wake Word (Real KWS)",
+      statusStub: "Stub mode",
+      statusReal: "Real KWS",
+      currentModel: "Model",
+      selectModel: "Select a model",
+      enable: "Enable Real KWS",
+      disable: "Disable",
+      downloading: "Downloading…",
+      verifying: "Verifying…",
+      verified: "Model verified",
+      verifyFailed: "Model verification failed",
+      enabledToast: "Real KWS enabled",
+      disabledToast: "Real KWS disabled",
+      simpleCta: "Enable Real Recognition",
+      noModels: "No models available",
+      autoChoiceNote: "Auto-selecting recommended model",
+      modelLang: "Language",
+      modelSize: "Size",
+      downloadProgress: "Downloading: {percent}%",
+    },
   },
   es: {
     // Simple Home
@@ -476,6 +522,29 @@ export const translations: Record<Language, Translations> = {
       device_busy: "Otro programa está usando este dispositivo.",
       device_not_found: "No se encontró el dispositivo seleccionado.",
       unknown_error: "Ocurrió un error inesperado.",
+    },
+
+    // KWS (Keyword Spotting) - KWS-REAL-001-UI
+    kws: {
+      title: "Palabra Clave (KWS Real)",
+      statusStub: "Modo simulado",
+      statusReal: "KWS real",
+      currentModel: "Modelo",
+      selectModel: "Selecciona un modelo",
+      enable: "Activar KWS Real",
+      disable: "Desactivar",
+      downloading: "Descargando…",
+      verifying: "Verificando…",
+      verified: "Modelo verificado",
+      verifyFailed: "Falló la verificación del modelo",
+      enabledToast: "KWS real activado",
+      disabledToast: "KWS real desactivado",
+      simpleCta: "Activar Reconocimiento Real",
+      noModels: "No hay modelos disponibles",
+      autoChoiceNote: "Seleccionando automáticamente el modelo recomendado",
+      modelLang: "Idioma",
+      modelSize: "Tamaño",
+      downloadProgress: "Descargando: {percent}%",
     },
   },
 };

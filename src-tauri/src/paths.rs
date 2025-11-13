@@ -98,11 +98,19 @@ impl AppPaths {
         self.models_dir().join("registry.sig")
     }
 
-    /// Get path to KWS model directory
-    pub fn kws_model_dir(&self) -> PathBuf {
-        self.models_dir()
-            .join("kws")
-            .join("sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01")
+    /// Get path to KWS models root directory
+    pub fn kws_models_root(&self) -> PathBuf {
+        self.models_dir().join("kws")
+    }
+
+    /// Get path to a specific KWS model directory by model_id
+    pub fn kws_model_dir(&self, model_id: &str) -> PathBuf {
+        self.kws_models_root().join(model_id)
+    }
+
+    /// Get path to KWS registry file
+    pub fn kws_registry(&self) -> PathBuf {
+        self.models_dir().join("kws_registry.json")
     }
 
     /// Get path to voiceprints directory

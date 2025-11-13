@@ -4,6 +4,7 @@
 mod audio;
 mod display_backend;
 mod ffi;
+mod model_manager;
 mod paths;
 mod preflight;
 mod registry;
@@ -99,6 +100,7 @@ struct AppState {
     audio_runtime: Arc<Mutex<Option<AudioRuntime>>>,
     speaker_biometrics: Arc<Mutex<Option<SpeakerBiometrics>>>,
     mic_monitor: Arc<Mutex<Option<MicMonitor>>>,
+    model_manager: Arc<tokio::sync::Mutex<model_manager::ModelManager>>,
     /// Reentrancy guard for restart_audio_capture
     restart_in_progress: AtomicBool,
     /// Remember if monitor was active before restart (for resume)
@@ -178,6 +180,215 @@ async fn save_preferences(state: State<'_, AppState>) -> Result<String, String> 
 async fn kws_enabled(state: State<'_, AppState>) -> Result<bool, String> {
     let config = state.config.lock().unwrap();
     Ok(config.kws.enabled)
+}
+
+// ===== KWS MODEL MANAGEMENT COMMANDS =====
+
+/// Helper function to restart audio capture (internal use)
+async fn restart_audio_capture_internal(
+    app_handle: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    // Reuse existing restart logic but return simpler Result
+    restart_audio_capture(state, app_handle)
+        .await
+        .map(|_| ())
+}
+
+/// KWS status response
+#[derive(Debug, Clone, Serialize)]
+struct KwsStatus {
+    mode: String,
+    model_id: Option<String>,
+    keyword: String,
+    lang: Option<String>,
+    enabled: bool,
+}
+
+/// Tauri command: Get KWS status
+#[tauri::command]
+async fn kws_status(state: State<'_, AppState>) -> Result<KwsStatus, String> {
+    // Clone config data first (don't hold lock across await)
+    let (mode, model_id_opt, keyword, enabled) = {
+        let config = state.config.lock().unwrap();
+        (
+            config.kws.mode.clone(),
+            config.kws.model_id.clone(),
+            config.kws.keyword.clone(),
+            config.kws.enabled,
+        )
+    };
+
+    // Get model info if available (can await now)
+    let lang = if let Some(ref model_id) = model_id_opt {
+        let manager = state.model_manager.lock().await;
+        if let Ok(registry) = manager.registry() {
+            registry.get_model(model_id).map(|e| e.lang.clone())
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    Ok(KwsStatus {
+        mode,
+        model_id: model_id_opt,
+        keyword,
+        lang,
+        enabled,
+    })
+}
+
+/// Tauri command: List available KWS models from registry
+#[tauri::command]
+async fn kws_list_models(
+    state: State<'_, AppState>,
+) -> Result<Vec<model_manager::KwsModelEntry>, String> {
+    let manager = state.model_manager.lock().await;
+    let registry = manager.registry().map_err(|e| e.to_string())?;
+
+    let mut models: Vec<_> = registry
+        .models
+        .iter()
+        .map(|(id, entry)| {
+            let mut e = entry.clone();
+            e.description = format!("{} ({})", id, e.description);
+            e
+        })
+        .collect();
+
+    // Sort by language and wakeword
+    models.sort_by(|a, b| a.lang.cmp(&b.lang).then(a.wakeword.cmp(&b.wakeword)));
+
+    Ok(models)
+}
+
+/// Tauri command: Download a KWS model (without enabling)
+#[tauri::command]
+async fn kws_download_model(
+    model_id: String,
+    app_handle: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    // Validate model_id
+    model_manager::ModelManager::validate_model_id(&model_id).map_err(|e| e.to_string())?;
+
+    // Check if already downloaded
+    let manager = state.model_manager.lock().await;
+    if manager.is_model_ready(&model_id).map_err(|e| e.to_string())? {
+        return Ok(format!("Model '{}' is already downloaded and verified", model_id));
+    }
+
+    log::info!("Downloading model: {}", model_id);
+
+    // Download model
+    manager
+        .download_model(&app_handle, &model_id)
+        .await
+        .map_err(|e| {
+            let error_msg = format!("Model download failed: {}", e);
+            log::error!("{}", error_msg);
+            let _ = app_handle.emit("audio:error", error_msg.clone());
+            error_msg
+        })?;
+
+    // Verify model
+    let registry = manager.registry().map_err(|e| e.to_string())?;
+    let entry = registry
+        .get_model(&model_id)
+        .ok_or_else(|| format!("Model '{}' not found in registry", model_id))?;
+
+    let is_valid = manager
+        .verify_model(&model_id, &entry.sha256)
+        .map_err(|e| e.to_string())?;
+
+    if !is_valid {
+        // Verification failed - remove corrupted model
+        manager.remove_model(&model_id).ok();
+        let error_msg = format!("Model verification failed for '{}'", model_id);
+        log::error!("{}", error_msg);
+        let _ = app_handle.emit("kws:model_verify_failed", &model_id);
+        let _ = app_handle.emit("audio:error", error_msg.clone());
+        return Err(error_msg);
+    }
+
+    log::info!("Model '{}' verified successfully", model_id);
+    let _ = app_handle.emit("kws:model_verified", &model_id);
+
+    Ok(format!("Model '{}' downloaded and verified", model_id))
+}
+
+/// Tauri command: Enable real KWS with a specific model
+#[tauri::command]
+async fn kws_enable(
+    model_id: String,
+    app_handle: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    // Validate model_id
+    model_manager::ModelManager::validate_model_id(&model_id).map_err(|e| e.to_string())?;
+
+    #[cfg(not(feature = "kws_real"))]
+    {
+        return Err(
+            "Real KWS not available: app was built without kws_real feature".to_string(),
+        );
+    }
+
+    #[cfg(feature = "kws_real")]
+    {
+        // Check if model is ready, download if needed
+        {
+            let manager = state.model_manager.lock().await;
+            if !manager.is_model_ready(&model_id).map_err(|e| e.to_string())? {
+                log::info!("Model '{}' not found, downloading...", model_id);
+                drop(manager);
+
+                // Download and verify
+                kws_download_model(model_id.clone(), app_handle.clone(), state.clone()).await?;
+            }
+        }
+
+        // Update config
+        {
+            let mut config = state.config.lock().unwrap();
+            config.kws.model_id = Some(model_id.clone());
+            config.kws.mode = "real".to_string();
+            config.kws.enabled = true;
+        }
+
+        // Restart audio runtime with real KWS
+        restart_audio_capture_internal(app_handle.clone(), state.clone()).await?;
+
+        log::info!("Real KWS enabled with model: {}", model_id);
+        let _ = app_handle.emit("kws:enabled", &model_id);
+
+        Ok(format!("Real KWS enabled with model '{}'", model_id))
+    }
+}
+
+/// Tauri command: Disable real KWS and return to stub
+#[tauri::command]
+async fn kws_disable(
+    app_handle: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    // Update config to use stub
+    {
+        let mut config = state.config.lock().unwrap();
+        config.kws.mode = "stub".to_string();
+        config.kws.model_id = None;
+        config.kws.enabled = true; // Keep KWS enabled, just switch to stub
+    }
+
+    // Restart audio runtime with stub KWS
+    restart_audio_capture_internal(app_handle.clone(), state.clone()).await?;
+
+    log::info!("KWS disabled, returned to stub mode");
+    let _ = app_handle.emit("kws:disabled", ());
+
+    Ok("KWS disabled, returned to stub mode".to_string())
 }
 
 /// Tauri command: Get current configuration
@@ -1294,6 +1505,20 @@ async fn run_app(
     paths_for_setup: AppPaths,
     config_for_setup: AppConfig,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    // Initialize model manager
+    let mut model_manager = model_manager::ModelManager::new(paths.models_dir());
+
+    // Try to load registry (non-fatal if missing)
+    let registry_path = paths.kws_registry();
+    if registry_path.exists() {
+        match model_manager.load_registry(&registry_path) {
+            Ok(()) => log::info!("KWS registry loaded successfully"),
+            Err(e) => log::warn!("Failed to load KWS registry: {}", e),
+        }
+    } else {
+        log::warn!("KWS registry not found at: {}", registry_path.display());
+    }
+
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .manage(AppState {
@@ -1302,6 +1527,7 @@ async fn run_app(
             audio_runtime: Arc::new(Mutex::new(None)),
             speaker_biometrics: Arc::new(Mutex::new(None)),
             mic_monitor: Arc::new(Mutex::new(None)),
+            model_manager: Arc::new(tokio::sync::Mutex::new(model_manager)),
             restart_in_progress: AtomicBool::new(false),
             monitor_was_active: Arc::new(Mutex::new(false)),
             last_restart_ms: Arc::new(Mutex::new(0)),
@@ -1381,6 +1607,11 @@ async fn run_app(
             preflight::run_preflight_checks,
             kws_set_sensitivity,
             kws_enabled,
+            kws_status,
+            kws_list_models,
+            kws_download_model,
+            kws_enable,
+            kws_disable,
             vad_set_threshold,
             save_preferences,
             get_config,

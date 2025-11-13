@@ -71,6 +71,16 @@ pub struct KwsConfig {
     pub provider: String,
     pub max_active_paths: usize,
     pub enabled: bool,
+    /// Model ID for real KWS (None = use stub)
+    #[serde(default)]
+    pub model_id: Option<String>,
+    /// Current mode: "stub" or "real"
+    #[serde(default = "default_mode")]
+    pub mode: String,
+}
+
+fn default_mode() -> String {
+    "stub".to_string()
 }
 
 impl Default for KwsConfig {
@@ -83,6 +93,8 @@ impl Default for KwsConfig {
             provider: "cpu".to_string(),
             max_active_paths: 4,
             enabled: true,
+            model_id: None,
+            mode: "stub".to_string(),
         }
     }
 }

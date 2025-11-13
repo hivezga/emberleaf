@@ -1,0 +1,21 @@
+{
+  "version": "1.0.0",
+  "models": {
+    "gigaspeech-en-3.3M": {
+      "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/kws-models/sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01.tar.bz2",
+      "sha256": "e7e07746d2e28b62f34e01f7b3fc5bd73fc9feb0e7b3a95f59153c1776a06b94",
+      "size": 4200000,
+      "lang": "en",
+      "wakeword": "hey ember",
+      "description": "Zipformer KWS model trained on GigaSpeech (English, 3.3M params)"
+    },
+    "wenetspeech-zh-3.3M": {
+      "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/kws-models/sherpa-onnx-kws-zipformer-wenetspeech-3.3M-2024-01-01.tar.bz2",
+      "sha256": "a6d7c3e3c0a7a0d7e5f5e8a0f5e8a0f5e8a0f5e8a0f5e8a0f5e8a0f5e8a0f5",
+      "size": 4300000,
+      "lang": "zh",
+      "wakeword": "小爱同学",
+      "description": "Zipformer KWS model trained on WenetSpeech (Chinese, 3.3M params)"
+    }
+  }
+}

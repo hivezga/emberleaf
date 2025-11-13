@@ -122,24 +122,31 @@ impl KwsWorker {
         config: KwsConfig,
         vad_config: VadConfig,
         audio_config: AudioConfig,
+        model_id: String,
     ) -> Result<Self> {
         log::info!("Starting real KWS worker with Sherpa-ONNX v1.10.30");
+        log::info!("  Model ID: {}", model_id);
 
-        // Get model directory from injected paths (no state access)
-        let model_dir = paths.kws_model_dir();
+        // Get model directory for the specified model_id
+        let model_dir = paths.kws_model_dir(&model_id);
 
         if !model_dir.exists() {
             bail!(
-                "KWS model directory not found: {}. Run scripts/fetch_models.sh",
+                "KWS model directory not found: {}. Enable and download model first.",
                 model_dir.display()
             );
         }
 
         // Spawn worker thread (std::thread to avoid Send issues with FFI pointers)
         let handle = std::thread::spawn(move || {
-            if let Err(e) =
-                run_real_kws_worker(app_handle, config, vad_config, audio_config, model_dir)
-            {
+            if let Err(e) = run_real_kws_worker(
+                app_handle,
+                config,
+                vad_config,
+                audio_config,
+                model_dir,
+                model_id,
+            ) {
                 log::error!("Real KWS worker thread error: {}", e);
             }
         });
@@ -158,6 +165,7 @@ fn run_real_kws_worker(
     vad_config: VadConfig,
     audio_config: AudioConfig,
     model_dir: std::path::PathBuf,
+    model_id: String,
 ) -> Result<()> {
     log::info!("Initializing real KWS worker with Sherpa-ONNX");
     log::info!("  Keyword: '{}'", config.keyword);

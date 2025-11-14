@@ -1,26 +1,27 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# REL-002: .deb build
-# Requires: tauri-bundler (or cargo-deb), control metadata in tauri.conf.json/Cargo.toml
+# REL-002B: .deb build via Tauri bundler
+# Requires: @tauri-apps/cli, system deps, dpkg
 # Output: dist/emberleaf_*.deb + SHASUMS256.txt
 
-DIST_DIR="dist"
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+DIST_DIR="$ROOT/dist"
+BUNDLE_DIR="$ROOT/src-tauri/target/release/bundle/deb"
+
 mkdir -p "$DIST_DIR"
 
-echo "==> Building .deb..."
-# If using tauri-bundler (preferred):
-#   npm run tauri build -- --bundles deb
-# Or cargo-deb flow could be placed here.
+echo "==> Building .deb via Tauri bundler"
+cd "$ROOT"
+npm run tauri build -- --bundles deb
 
-# Placeholder: ensure a file exists for CI wiring
-DEB_NAME="emberleaf_0.9.0_amd64.deb"
-touch "${DIST_DIR}/${DEB_NAME}"
+echo "==> Collecting artifacts"
+cp -v "$BUNDLE_DIR"/*.deb "$DIST_DIR/"
 
-echo "==> Generating SHA256..."
+echo "==> Generating SHA256 (append to same file)"
 (
   cd "$DIST_DIR"
-  sha256sum *.deb > SHASUMS256.txt
+  sha256sum *.deb >> SHASUMS256.txt
   echo "==> Done:"
   ls -lh *.deb SHASUMS256.txt
 )

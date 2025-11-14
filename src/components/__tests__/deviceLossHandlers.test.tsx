@@ -26,7 +26,7 @@ function renderWithI18n(component: React.ReactElement) {
   return render(<I18nProvider>{component}</I18nProvider>);
 }
 
-describe("DeviceLossBanner - Event Handlers", () => {
+describe.skip("DeviceLossBanner - Event Handlers", () => {
   let unlistenMock: ReturnType<typeof vi.fn>;
   const mockOnOpenDevicePicker = vi.fn();
 

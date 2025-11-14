@@ -20,7 +20,7 @@
     ],
     "resources": [],
     "copyright": "© 2025 Lotus Ember Labs",
-    "category": "AudioVideo",
+    "category": "Utility",
     "shortDescription": "Private local voice assistant",
     "longDescription": "Fully offline, privacy-first voice assistant powered by Sherpa-ONNX",
     "linux": {

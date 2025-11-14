@@ -1,3 +1,7 @@
+//! Model registry with SHA-256 verification and Ed25519 signatures
+//! Contains defensive API functions reserved for future verification features
+#![allow(dead_code)]
+
 use anyhow::{anyhow, bail, Context, Result};
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use serde::{Deserialize, Serialize};

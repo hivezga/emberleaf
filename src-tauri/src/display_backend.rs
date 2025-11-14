@@ -2,6 +2,8 @@
 //!
 //! Handles Wayland/X11 detection and configuration to work around
 //! WebKitGTK/GBM/DMABUF issues on various Linux compositors.
+//! Contains utility methods reserved for future display backend management
+#![allow(dead_code)]
 
 use std::env;
 

@@ -64,6 +64,7 @@ impl KwsRegistry {
     }
 
     /// List all available model IDs
+    #[allow(dead_code)]
     pub fn list_models(&self) -> Vec<String> {
         self.models.keys().cloned().collect()
     }

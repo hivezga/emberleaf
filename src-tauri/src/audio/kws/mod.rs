@@ -21,6 +21,7 @@ cfg_if::cfg_if! {
 }
 
 /// Unified KWS worker that can hold either real or stub implementation
+#[allow(dead_code)]
 pub enum KwsWorker {
     #[cfg(feature = "kws_real")]
     Real(real::KwsWorker),
@@ -29,6 +30,7 @@ pub enum KwsWorker {
 
 impl KwsWorker {
     /// Start the appropriate KWS worker based on configuration
+    #[allow(dead_code)]
     pub fn start(
         app_handle: tauri::AppHandle,
         paths: crate::paths::AppPaths,

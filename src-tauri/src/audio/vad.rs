@@ -37,6 +37,7 @@ impl Default for VadConfig {
 /// 4. Call the VAD inference API for each frame
 pub struct VoiceActivityDetector {
     config: VadConfig,
+    #[allow(dead_code)]
     sample_rate: u32,
     // TODO: Add actual VAD model handle
     // vad_handle: *mut sherpa_sys::SherpaOnnxVad,
@@ -87,6 +88,7 @@ impl VoiceActivityDetector {
     }
 
     /// Update VAD threshold at runtime
+    #[allow(dead_code)]
     pub fn set_threshold(&mut self, threshold: f32) {
         log::info!(
             "VAD threshold updated: {} → {}",
@@ -97,6 +99,7 @@ impl VoiceActivityDetector {
     }
 
     /// Update VAD mode at runtime
+    #[allow(dead_code)]
     pub fn set_mode(&mut self, mode: VadMode) {
         log::info!("VAD mode updated: {:?} → {:?}", self.config.mode, mode);
         self.config.mode = mode;
@@ -115,6 +118,7 @@ impl VoiceActivityDetector {
     }
 
     /// Reset VAD state (useful between utterances)
+    #[allow(dead_code)]
     pub fn reset(&mut self) {
         // TODO: Reset VAD model state if needed
         log::debug!("VAD state reset");

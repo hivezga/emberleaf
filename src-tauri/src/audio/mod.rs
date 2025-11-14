@@ -324,6 +324,7 @@ pub fn resolve_preferred_input_device(
 }
 
 /// Resolve preferred output device using stable_id (primary), name (fallback), or default
+#[allow(dead_code)]
 pub fn resolve_preferred_output_device(
     stable_id: Option<&DeviceId>,
     name: Option<&str>,
@@ -392,6 +393,7 @@ pub fn check_input_device_exists(stable_id: Option<&DeviceId>, name: Option<&str
 }
 
 /// Check if an output device with the given stable_id or name still exists
+#[allow(dead_code)]
 pub fn check_output_device_exists(stable_id: Option<&DeviceId>, name: Option<&str>) -> bool {
     resolve_preferred_output_device(stable_id, name)
         .ok()
@@ -411,6 +413,7 @@ pub trait AudioSource {
     fn sample_rate(&self) -> u32;
 
     /// Get the frame size in samples
+    #[allow(dead_code)]
     fn frame_size(&self) -> usize;
 }
 
@@ -419,12 +422,15 @@ pub struct AudioCapture {
     _stream: Stream,
     receiver: mpsc::UnboundedReceiver<Vec<i16>>,
     config: AudioConfig,
+    #[allow(dead_code)]
     device_rate: u32,
+    #[allow(dead_code)]
     device_channels: usize,
     needs_resampling: bool,
     resampler: Option<Arc<Mutex<FftFixedIn<f32>>>>,
     buffer: Vec<i16>,
     resample_input_buffer: Vec<f32>,
+    #[allow(dead_code)]
     resample_output_buffer: Vec<f32>,
 }
 
@@ -450,6 +456,7 @@ impl AudioCapture {
     }
 
     /// Create a new audio capture system with a specific device name
+    #[allow(dead_code)]
     pub fn new_with_name(config: AudioConfig, device_name: &str) -> Result<Self> {
         let host = cpal::default_host();
 
@@ -574,6 +581,7 @@ impl AudioCapture {
     }
 
     /// Get the device sample rate (actual mic rate)
+    #[allow(dead_code)]
     pub fn device_rate(&self) -> u32 {
         self.device_rate
     }

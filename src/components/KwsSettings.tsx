@@ -1,15 +1,18 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Brain, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Brain, AlertCircle, CheckCircle2, Play } from "lucide-react";
 import {
   kwsStatus,
   kwsListModels,
   kwsEnable,
   kwsDisable,
   subscribeKwsEvents,
+  kwsArmTestWindow,
+  isPipewireLoopback,
   type KwsStatus as KwsStatusType,
   type KwsModelEntry,
   type KwsDownloadProgress,
+  type KwsTestPassPayload,
 } from "../lib/tauriSafe";
 import { useI18n, format } from "../lib/i18n";
 import { Button } from "./ui/button";
@@ -32,6 +35,9 @@ export function KwsSettings() {
   const [downloadProgress, setDownloadProgress] = useState<KwsDownloadProgress | null>(null);
   const [verificationState, setVerificationState] = useState<"idle" | "verifying" | "verified" | "failed">("idle");
   const [isEnabling, setIsEnabling] = useState(false);
+  const [isTesting, setIsTesting] = useState(false);
+  const [testResult, setTestResult] = useState<"idle" | "pass" | "fail">("idle");
+  const [countdown, setCountdown] = useState<number | null>(null);
 
   // Load initial status and models
   useEffect(() => {
@@ -112,9 +118,56 @@ export function KwsSettings() {
           toast.info(t.kws.disabledToast);
           loadStatus(); // Refresh status
         },
+        onWakeTestPass: (_payload: KwsTestPassPayload) => {
+          setTestResult("pass");
+          setIsTesting(false);
+          setCountdown(null);
+          toast.success(t.kws.testPass);
+        },
       });
     } catch (error) {
       console.log("Event listeners not available (web mode)");
+    }
+  }
+
+  async function handleTest() {
+    setIsTesting(true);
+    setTestResult("idle");
+    setCountdown(null);
+
+    try {
+      // Check if loopback is available
+      const hasLoopback = await isPipewireLoopback();
+
+      if (!hasLoopback) {
+        // No loopback - use countdown for user speech
+        toast.info(t.kws.testHintSayNow);
+
+        // 5-second countdown
+        for (let i = 5; i > 0; i--) {
+          setCountdown(i);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+        setCountdown(null);
+      }
+
+      // Arm test window for 8 seconds
+      await kwsArmTestWindow(8000);
+
+      // Wait for test window to expire
+      await new Promise(resolve => setTimeout(resolve, 8000));
+
+      // If still testing (no pass event received), mark as fail
+      setIsTesting(false);
+      if (testResult === "idle") {
+        setTestResult("fail");
+        toast.warning(t.kws.testFailRetry);
+      }
+    } catch (error) {
+      console.error("Test failed:", error);
+      toast.error(`Test error: ${error}`);
+      setIsTesting(false);
+      setTestResult("fail");
     }
   }
 
@@ -266,15 +319,45 @@ export function KwsSettings() {
               {isEnabling ? t.kws.downloading : t.kws.enable}
             </Button>
           ) : (
-            <Button
-              onClick={handleDisable}
-              disabled={isLoading}
-              variant="outline"
-            >
-              {t.kws.disable}
-            </Button>
+            <>
+              <Button
+                onClick={handleDisable}
+                disabled={isLoading}
+                variant="outline"
+              >
+                {t.kws.disable}
+              </Button>
+              <Button
+                onClick={handleTest}
+                disabled={isTesting}
+                variant="secondary"
+              >
+                <Play className="h-4 w-4 mr-2" />
+                {isTesting ? t.kws.testing : t.kws.testButton}
+              </Button>
+            </>
           )}
         </div>
+
+        {/* Test State Display */}
+        {countdown !== null && (
+          <div className="flex items-center gap-2 text-sm font-medium text-blue-600 dark:text-blue-400">
+            <span>{countdown}...</span>
+            <span>{t.kws.testHintSayNow}</span>
+          </div>
+        )}
+        {testResult === "pass" && (
+          <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+            <CheckCircle2 className="h-4 w-4" />
+            <span>{t.kws.testPass}</span>
+          </div>
+        )}
+        {testResult === "fail" && (
+          <div className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400">
+            <AlertCircle className="h-4 w-4" />
+            <span>{t.kws.testFailRetry}</span>
+          </div>
+        )}
 
         {/* Status Info */}
         {status && (

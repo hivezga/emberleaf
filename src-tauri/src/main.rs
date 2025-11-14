@@ -93,6 +93,33 @@ impl AppConfig {
     }
 }
 
+/// KWS test window state (for QA-019 wake word testing)
+#[derive(Debug, Default)]
+struct KwsTestWindow {
+    /// Test window expiration time (None = not armed)
+    expires_at: Option<SystemTime>,
+}
+
+impl KwsTestWindow {
+    fn arm(&mut self, duration_ms: u32) {
+        self.expires_at = SystemTime::now()
+            .checked_add(std::time::Duration::from_millis(duration_ms as u64));
+        log::info!("KWS test window armed for {}ms", duration_ms);
+    }
+
+    fn is_armed(&self) -> bool {
+        if let Some(expires_at) = self.expires_at {
+            SystemTime::now() < expires_at
+        } else {
+            false
+        }
+    }
+
+    fn disarm(&mut self) {
+        self.expires_at = None;
+    }
+}
+
 /// Application state
 struct AppState {
     paths: AppPaths,
@@ -107,6 +134,8 @@ struct AppState {
     monitor_was_active: Arc<Mutex<bool>>,
     /// Last restart timestamp (milliseconds since UNIX epoch)
     last_restart_ms: Arc<Mutex<u64>>,
+    /// KWS test window for QA-019 automated testing
+    kws_test_window: Arc<Mutex<KwsTestWindow>>,
 }
 
 /// Tauri command: Set KWS sensitivity (runtime only, not persisted)
@@ -389,6 +418,58 @@ async fn kws_disable(
     let _ = app_handle.emit("kws:disabled", ());
 
     Ok("KWS disabled, returned to stub mode".to_string())
+}
+
+/// Tauri command: Arm KWS test window for QA-019 automated testing
+///
+/// When armed, wake word detection will emit a special `kws:wake_test_pass` event
+/// for automated test verification. Window auto-expires after duration_ms.
+#[tauri::command]
+async fn kws_arm_test_window(
+    duration_ms: u32,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    // Validate duration (max 30 seconds for safety)
+    if duration_ms > 30000 {
+        return Err("Test window duration cannot exceed 30000ms".to_string());
+    }
+
+    let mut test_window = state.kws_test_window.lock().unwrap();
+    test_window.arm(duration_ms);
+
+    Ok(format!("KWS test window armed for {}ms", duration_ms))
+}
+
+/// Tauri command: Check if PipeWire loopback is available
+///
+/// Returns true if we detect PipeWire audio server with loopback capability.
+/// This is used by the test UI to decide whether to play a sample or prompt user speech.
+#[tauri::command]
+async fn is_pipewire_loopback() -> Result<bool, String> {
+    #[cfg(target_os = "linux")]
+    {
+        // Check if PipeWire is running by looking for pw-cli or pipewire process
+        // This is a heuristic - we assume loopback is available if PipeWire is present
+        let output = std::process::Command::new("pgrep")
+            .arg("-x")
+            .arg("pipewire")
+            .output();
+
+        if let Ok(output) = output {
+            if output.status.success() && !output.stdout.is_empty() {
+                log::info!("PipeWire detected, loopback assumed available");
+                return Ok(true);
+            }
+        }
+
+        log::info!("PipeWire not detected or loopback not available");
+        Ok(false)
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    {
+        Ok(false)
+    }
 }
 
 /// Tauri command: Get current configuration
@@ -911,6 +992,140 @@ async fn play_test_tone(
         .map_err(|e| format!("Test tone failed: {:#}", e))
 }
 
+/// Tauri command: Play a WAV asset file (QA-019 test harness)
+///
+/// Plays a bundled WAV file from `assets/audio/` directory with amplitude capping.
+/// Used by automated wake-word testing to play reference samples.
+#[tauri::command]
+async fn play_wav_asset_once(
+    name: String,
+    amplitude: Option<f32>,
+    _app: AppHandle,
+) -> Result<String, String> {
+    // SEC-001B: Validate asset name (prevent path traversal)
+    if name.contains("..") || name.contains('/') || name.contains('\\') {
+        return Err("Invalid asset name: path traversal not allowed".to_string());
+    }
+
+    if !name.ends_with(".wav") {
+        return Err("Asset must be a .wav file".to_string());
+    }
+
+    // Cap amplitude at -12 dBFS (0.25) for safety
+    let amp = amplitude.unwrap_or(0.25).min(0.25);
+
+    log::info!("Playing WAV asset: {} at amplitude {:.2}", name, amp);
+
+    // Construct path to bundled asset
+    // In dev: assets/audio/{name}
+    // In prod: bundled resources (TBD based on Tauri packaging)
+    let asset_path = std::path::PathBuf::from("assets/audio").join(&name);
+
+    if !asset_path.exists() {
+        return Err(format!("Asset not found: {}", asset_path.display()));
+    }
+
+    // Decode WAV file
+    let mut reader = hound::WavReader::open(&asset_path)
+        .map_err(|e| format!("Failed to open WAV: {}", e))?;
+
+    let spec = reader.spec();
+    log::info!(
+        "WAV spec: {} Hz, {} ch, {} bits",
+        spec.sample_rate,
+        spec.channels,
+        spec.bits_per_sample
+    );
+
+    // Read all samples (assumes 16-bit PCM)
+    let samples: Vec<i16> = if spec.bits_per_sample == 16 {
+        reader
+            .samples::<i16>()
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| format!("Failed to read samples: {}", e))?
+    } else {
+        return Err(format!("Unsupported bit depth: {}", spec.bits_per_sample));
+    };
+
+    // Convert to f32 with amplitude scaling
+    let samples_f32: Vec<f32> = samples
+        .iter()
+        .map(|&s| (s as f32 / 32768.0) * amp)
+        .collect();
+
+    // Play via CPAL using a similar approach to test_tone
+    play_wav_samples_internal(None, samples_f32, spec.sample_rate, spec.channels)
+        .map_err(|e| format!("Playback failed: {}", e))?;
+
+    let duration_s = samples.len() as f32 / spec.sample_rate as f32 / spec.channels as f32;
+
+    Ok(format!(
+        "✓ Played {} ({:.1}s) at {:.0}% amplitude",
+        name,
+        duration_s,
+        amp * 100.0
+    ))
+}
+
+/// Internal helper: Play PCM samples via CPAL
+fn play_wav_samples_internal(
+    device_name: Option<String>,
+    samples: Vec<f32>,
+    sample_rate: u32,
+    channels: u16,
+) -> anyhow::Result<()> {
+    use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+
+    let host = cpal::default_host();
+
+    // Select output device
+    let device = if let Some(ref name) = device_name {
+        host.output_devices()?
+            .find(|d| d.name().map(|n| n == *name).unwrap_or(false))
+            .ok_or_else(|| anyhow::anyhow!("Output device not found: {}", name))?
+    } else {
+        host.default_output_device()
+            .ok_or_else(|| anyhow::anyhow!("No default output device available"))?
+    };
+
+    let config = cpal::StreamConfig {
+        channels,
+        sample_rate: cpal::SampleRate(sample_rate),
+        buffer_size: cpal::BufferSize::Default,
+    };
+
+    // Create a shared buffer wrapped in Arc/Mutex for thread-safe access
+    let buffer = std::sync::Arc::new(std::sync::Mutex::new(samples));
+    let buffer_clone = buffer.clone();
+    let mut position = 0usize;
+
+    let stream = device.build_output_stream(
+        &config,
+        move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
+            let buf = buffer_clone.lock().unwrap();
+            for sample in data.iter_mut() {
+                *sample = if position < buf.len() {
+                    let value = buf[position];
+                    position += 1;
+                    value
+                } else {
+                    0.0 // Silence after buffer ends
+                };
+            }
+        },
+        move |err| log::error!("WAV playback stream error: {}", err),
+        None,
+    )?;
+
+    stream.play()?;
+
+    // Calculate playback duration
+    let duration_s = buffer.lock().unwrap().len() as f32 / sample_rate as f32;
+    std::thread::sleep(std::time::Duration::from_secs_f32(duration_s + 0.1));
+
+    Ok(())
+}
+
 /// Tauri command: Start microphone monitoring
 #[tauri::command]
 async fn start_mic_monitor(
@@ -1280,6 +1495,63 @@ fn initialize_audio_runtime(
     }
 }
 
+/// QA-019: Set up test window event listener
+///
+/// Listens for internal wake word detection events from the KWS worker.
+/// If test window is armed, emits `kws:wake_test_pass` event and disarms the window.
+fn setup_test_window_listener(app_handle: AppHandle) {
+    use tauri::Listener;
+
+    #[derive(serde::Deserialize, Clone)]
+    struct TestDetectionPayload {
+        model_id: String,
+        keyword: String,
+        ts: u64,
+    }
+
+    let app_handle_clone = app_handle.clone();
+    let _ = app_handle.listen("_kws_internal_detection", move |event| {
+        if let Ok(payload) = serde_json::from_str::<TestDetectionPayload>(&event.payload()) {
+            let state: State<AppState> = app_handle_clone.state();
+
+            // Check if test window is armed
+            let is_armed = {
+                let test_window = state.kws_test_window.lock().unwrap();
+                test_window.is_armed()
+            };
+
+            if is_armed {
+                log::info!("✓ KWS test window armed, wake word detected - emitting test pass event");
+
+                // Emit test pass event
+                #[derive(serde::Serialize, Clone)]
+                struct TestPassPayload {
+                    model_id: String,
+                    keyword: String,
+                    ts: u64,
+                }
+
+                let test_pass = TestPassPayload {
+                    model_id: payload.model_id.clone(),
+                    keyword: payload.keyword.clone(),
+                    ts: payload.ts,
+                };
+
+                if let Err(e) = app_handle_clone.emit("kws:wake_test_pass", &test_pass) {
+                    log::error!("Failed to emit kws:wake_test_pass event: {}", e);
+                }
+
+                // Disarm test window
+                let mut test_window = state.kws_test_window.lock().unwrap();
+                test_window.disarm();
+                log::info!("Test window disarmed after successful detection");
+            }
+        }
+    });
+
+    log::info!("KWS test window event listener installed");
+}
+
 /// Device health watcher - monitors configured devices and handles loss/fallback
 async fn device_health_watcher(app_handle: AppHandle) {
     use tokio::time::{sleep, Duration};
@@ -1531,6 +1803,7 @@ async fn run_app(
             restart_in_progress: AtomicBool::new(false),
             monitor_was_active: Arc::new(Mutex::new(false)),
             last_restart_ms: Arc::new(Mutex::new(0)),
+            kws_test_window: Arc::new(Mutex::new(KwsTestWindow::default())),
         })
         .setup(move |app| {
             let app_handle = app.handle().clone();
@@ -1599,6 +1872,10 @@ async fn run_app(
 
                 // Start device health watcher
                 tokio::spawn(device_health_watcher(app_handle.clone()));
+
+                // QA-019: Set up test window event listener
+                // Listens for internal wake word detections and emits test pass events if test window is armed
+                setup_test_window_listener(app_handle.clone());
             });
 
             Ok(())
@@ -1612,6 +1889,8 @@ async fn run_app(
             kws_download_model,
             kws_enable,
             kws_disable,
+            kws_arm_test_window,
+            is_pipewire_loopback,
             vad_set_threshold,
             save_preferences,
             get_config,
@@ -1625,6 +1904,7 @@ async fn run_app(
             set_output_device,
             restart_audio_capture,
             play_test_tone,
+            play_wav_asset_once,
             start_mic_monitor,
             stop_mic_monitor,
             set_persist_monitor_state,

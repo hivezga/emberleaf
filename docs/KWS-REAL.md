@@ -276,6 +276,68 @@ cargo build --features kws_real
 npm run tauri dev
 ```
 
+## Testing & Verification
+
+### Manual Testing (UI)
+
+**In-App Test Button** (Advanced → Audio Settings → Wake Word):
+
+1. Enable Real KWS with a model
+2. Click **"Test wake word"** button
+3. Say "Hey Ember" when prompted (or wait for countdown)
+4. See ✅ **"Test passed"** or ⚠️ **"Try again"** chip
+
+### Automated Testing (QA-019)
+
+**E2E Harness**: Validates enable → download → verify → detect flow
+
+```bash
+# Prerequisites: app running in dev mode
+npm run tauri dev
+
+# Run harness (manual speech)
+node scripts/qa/run-kws-e2e.mjs
+
+# With PipeWire loopback (deterministic)
+EMB_LOOPBACK=1 node scripts/qa/run-kws-e2e.mjs
+
+# Simulation mode (command wiring only, no audio)
+EMB_SIM=1 node scripts/qa/run-kws-e2e.mjs
+```
+
+Exit codes:
+- `0` = PASS (wake word detected)
+- `1` = FAIL (timeout, no detection)
+- `2` = ERROR (harness failure)
+
+**Detailed Test Scenarios**: See [QA-019-KWS-Smoke.md](./QA-019-KWS-Smoke.md) for comprehensive smoke test scenarios including:
+- First-time download + verification
+- Cached model (instant enable)
+- Offline mode (graceful failure + retry)
+- Corrupted model (SHA-256 mismatch)
+- Multiple model switching
+
+### DevTools Event Monitoring
+
+Paste in DevTools console to monitor KWS events in real-time:
+
+```javascript
+(async () => {
+  const { listen } = await import('@tauri-apps/api/event');
+
+  await Promise.all([
+    listen('kws:model_download_progress', e => console.log('⬇️ Download:', e.payload.percent + '%')),
+    listen('kws:model_verified', e => console.log('✅ Verified:', e.payload)),
+    listen('kws:enabled', e => console.log('🟢 Enabled:', e.payload)),
+    listen('kws:disabled', () => console.log('⚪ Disabled')),
+    listen('wakeword::detected', e => console.log('🔊 WAKE WORD:', e.payload)),
+    listen('kws:wake_test_pass', e => console.log('✅ TEST PASS:', e.payload)),
+  ]);
+
+  console.log('✅ KWS event listeners active');
+})();
+```
+
 ## References
 
 - [Sherpa-ONNX Official Docs](https://k2-fsa.github.io/sherpa/onnx/kws/index.html)

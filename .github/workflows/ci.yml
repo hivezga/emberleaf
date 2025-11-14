@@ -99,6 +99,33 @@ jobs:
       - name: Run tests
         run: npm run ci:test
 
+  # ===== QA-019B: KWS E2E Simulation (Optional) =====
+  qa-kws-e2e-sim:
+    name: QA-019 KWS E2E (Simulation)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Build frontend (web mode)
+        run: npm run build
+
+      - name: Run KWS E2E harness (simulation mode)
+        run: EMB_SIM=1 node scripts/qa/run-kws-e2e.mjs
+        continue-on-error: true  # Optional job - don't block CI if it fails
+
+      - name: Log result
+        run: echo "QA-019B simulation complete (does not test actual audio)"
+
   # ===== Check Rust Job =====
   check-rust:
     name: Check (Rust)

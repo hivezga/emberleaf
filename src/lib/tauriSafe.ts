@@ -432,6 +432,20 @@ export async function kwsDisable(): Promise<string> {
   return tauriInvoke<string>("kws_disable");
 }
 
+export async function kwsArmTestWindow(durationMs: number): Promise<string> {
+  if (!(await isTauriEnv())) {
+    return `[Web] Would arm test window for ${durationMs}ms`;
+  }
+  return tauriInvoke<string>("kws_arm_test_window", { durationMs });
+}
+
+export async function isPipewireLoopback(): Promise<boolean> {
+  if (!(await isTauriEnv())) {
+    return false; // Web mode has no loopback
+  }
+  return tauriInvoke<boolean>("is_pipewire_loopback");
+}
+
 // ===== KWS EVENT SUBSCRIPTIONS =====
 
 export interface KwsDownloadProgress {
@@ -441,12 +455,19 @@ export interface KwsDownloadProgress {
   percent: number;
 }
 
+export interface KwsTestPassPayload {
+  model_id: string;
+  keyword: string;
+  ts: number;
+}
+
 export interface KwsEventHandlers {
   onDownloadProgress?: (progress: KwsDownloadProgress) => void;
   onModelVerified?: (modelId: string) => void;
   onModelVerifyFailed?: (modelId: string) => void;
   onEnabled?: (modelId: string) => void;
   onDisabled?: () => void;
+  onWakeTestPass?: (payload: KwsTestPassPayload) => void;
 }
 
 let kwsSubscribed = false;
@@ -487,6 +508,12 @@ export async function subscribeKwsEvents(handlers: KwsEventHandlers) {
   if (handlers.onDisabled) {
     await listen("kws:disabled", () => {
       handlers.onDisabled?.();
+    });
+  }
+
+  if (handlers.onWakeTestPass) {
+    await listen<KwsTestPassPayload>("kws:wake_test_pass", (e) => {
+      handlers.onWakeTestPass?.(e.payload);
     });
   }
 

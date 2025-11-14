@@ -12,8 +12,8 @@ use anyhow::{bail, Context, Result};
 use std::collections::HashSet;
 use std::ffi::CString;
 use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant};
-use tauri::{AppHandle, Emitter};
+use std::time::{Duration, Instant, SystemTime};
+use tauri::{AppHandle, Emitter, Manager};
 
 /// Find a model file by pattern (e.g., "encoder*.onnx"), excluding int8 quantized versions
 fn find_model_file(model_dir: &Path, pattern_prefix: &str, extension: &str) -> Result<PathBuf> {
@@ -382,6 +382,32 @@ fn run_real_kws_worker(
 
                                 if let Err(e) = app_handle.emit("wakeword::detected", &event) {
                                     log::error!("Failed to emit wake-word event: {}", e);
+                                }
+
+                                // QA-019: Check if test window is armed and emit test pass event
+                                // We emit a separate internal event that main.rs will listen for
+                                // to check test window state and conditionally emit kws:wake_test_pass
+                                #[derive(serde::Serialize, Clone)]
+                                struct TestDetectionPayload {
+                                    model_id: String,
+                                    keyword: String,
+                                    ts: u64,
+                                }
+
+                                let ts = std::time::SystemTime::now()
+                                    .duration_since(std::time::UNIX_EPOCH)
+                                    .unwrap_or_default()
+                                    .as_millis() as u64;
+
+                                let test_payload = TestDetectionPayload {
+                                    model_id: model_id.clone(),
+                                    keyword: keyword_str.to_string(),
+                                    ts,
+                                };
+
+                                // Emit internal event for test window checker
+                                if let Err(e) = app_handle.emit("_kws_internal_detection", &test_payload) {
+                                    log::error!("Failed to emit internal detection event: {}", e);
                                 }
 
                                 last_detection = Some(Instant::now());

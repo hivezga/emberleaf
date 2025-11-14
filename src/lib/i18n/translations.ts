@@ -183,6 +183,13 @@ export interface Translations {
     modelLang: string;
     modelSize: string;
     downloadProgress: string;
+    // QA-019: Test feature strings
+    testButton: string;
+    testing: string;
+    testPass: string;
+    testFailRetry: string;
+    testHintSayNow: string;
+    loopbackMissingHint: string;
   };
 }
 
@@ -365,6 +372,13 @@ export const translations: Record<Language, Translations> = {
       modelLang: "Language",
       modelSize: "Size",
       downloadProgress: "Downloading: {percent}%",
+      // QA-019: Test feature strings
+      testButton: "Test wake word",
+      testing: "Testing…",
+      testPass: "✓ Test passed",
+      testFailRetry: "No wake word detected. Try again.",
+      testHintSayNow: "Say 'Hey Ember' now",
+      loopbackMissingHint: "Audio loopback not available. Speak the wake word when prompted.",
     },
   },
   es: {
@@ -545,6 +559,13 @@ export const translations: Record<Language, Translations> = {
       modelLang: "Idioma",
       modelSize: "Tamaño",
       downloadProgress: "Descargando: {percent}%",
+      // QA-019: Test feature strings
+      testButton: "Probar palabra clave",
+      testing: "Probando…",
+      testPass: "✓ Prueba exitosa",
+      testFailRetry: "No se detectó la palabra clave. Intenta de nuevo.",
+      testHintSayNow: "Di 'Hey Ember' ahora",
+      loopbackMissingHint: "Bucle de audio no disponible. Pronuncia la palabra clave cuando se indique.",
     },
   },
 };

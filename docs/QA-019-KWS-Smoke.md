@@ -265,6 +265,69 @@ After each change to KWS code, re-run:
 
 ---
 
+## Automated Harness (QA-019B)
+
+**Script**: `scripts/qa/run-kws-e2e.mjs`
+
+### Prerequisites
+
+* Real KWS build: `--features kws_real`
+* App running: `npm run tauri dev`
+* Optional (for deterministic testing): PipeWire loopback
+
+### Running the Harness
+
+**With loopback (deterministic, recommended for CI)**:
+```bash
+# 1. Set up PipeWire loopback (one-time setup)
+pactl load-module module-null-sink sink_name=virtual_speaker
+pactl load-module module-loopback source=virtual_speaker.monitor sink=@DEFAULT_SINK@
+
+# 2. Run harness
+EMB_LOOPBACK=1 node scripts/qa/run-kws-e2e.mjs
+echo $?  # 0 = pass, 1 = fail, 2 = error
+```
+
+**Without loopback (manual speech)**:
+```bash
+node scripts/qa/run-kws-e2e.mjs
+# Follow on-screen prompts to say "Hey Ember"
+```
+
+**Simulation mode (validates command wiring only, no audio)**:
+```bash
+EMB_SIM=1 node scripts/qa/run-kws-e2e.mjs
+```
+
+### What It Tests
+
+1. **Model listing**: `kws_list_models` returns at least one model
+2. **Model selection**: Auto-selects Spanish or first available model
+3. **Enable flow**: `kws_enable` triggers download → verify → enabled
+4. **Test window**: `kws_arm_test_window` arms 8-second detection window
+5. **Detection**: Plays bundled `wake-hey-ember-16k.wav` (loopback) or prompts user speech
+6. **Pass event**: Waits for `kws:wake_test_pass` event within timeout
+7. **Cleanup**: Disables KWS after test
+
+### Troubleshooting
+
+**"Asset not found: wake-hey-ember-16k.wav"**:
+→ Sample file needs to be created. See `assets/audio/README.md` for instructions.
+→ Fallback: Use manual speech mode (no `EMB_LOOPBACK`)
+
+**Test times out (no detection)**:
+* Check mic input levels in app (Advanced → Audio Settings)
+* Verify model is actually enabled (status pill shows "Real KWS")
+* Ensure PipeWire loopback is routing correctly: `pactl list sinks`
+* Try increasing test window duration in script
+
+**"App not running" or command errors**:
+* Start app first: `npm run tauri dev`
+* Ensure app is fully loaded (wait for window to appear)
+* Check DevTools console for errors
+
+---
+
 ## Known Issues / Limitations
 
 - Download progress throttled to 10Hz (may appear choppy)

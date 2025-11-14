@@ -74,6 +74,9 @@ url = "2.5"
 flate2 = "1.0"
 tar = "0.4"
 
+# WAV file decoding for QA-019 test harness
+hound = "3"
+
 [dev-dependencies]
 proptest = "1"
 

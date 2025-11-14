@@ -254,7 +254,7 @@ impl ModelManager {
             downloaded += chunk.len() as u64;
 
             // Emit progress event (throttled to 10Hz)
-            if downloaded % (total_size / 100).max(1) == 0 || downloaded == total_size {
+            if downloaded.is_multiple_of((total_size / 100).max(1)) || downloaded == total_size {
                 let percent = (downloaded as f32 / total_size as f32) * 100.0;
                 let progress = ModelDownloadProgress {
                     model_id: model_id.to_string(),

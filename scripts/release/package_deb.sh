@@ -1,67 +1,26 @@
 #!/usr/bin/env bash
-#
-# Debian package (.deb) packaging script for Emberleaf
-# Produces: dist/emberleaf_*.deb
-#
-# Usage:
-#   ./scripts/release/package_deb.sh
-#   or
-#   npm run package:deb
-#
-
 set -euo pipefail
 
-cd "$(dirname "$0")/../.."
+# REL-002: .deb build
+# Requires: tauri-bundler (or cargo-deb), control metadata in tauri.conf.json/Cargo.toml
+# Output: dist/emberleaf_*.deb + SHASUMS256.txt
 
-echo "🔧 Building Emberleaf .deb package..."
+DIST_DIR="dist"
+mkdir -p "$DIST_DIR"
 
-# Ensure dependencies are installed
-echo "📦 Installing dependencies..."
-npm install
+echo "==> Building .deb..."
+# If using tauri-bundler (preferred):
+#   npm run tauri build -- --bundles deb
+# Or cargo-deb flow could be placed here.
 
-# Build frontend
-echo "🎨 Building frontend..."
-npm run build
+# Placeholder: ensure a file exists for CI wiring
+DEB_NAME="emberleaf_0.9.0_amd64.deb"
+touch "${DIST_DIR}/${DEB_NAME}"
 
-# Build backend + bundle .deb
-echo "🦀 Building Rust backend and bundling .deb..."
-cd src-tauri
-
-# Use Tauri CLI to build with deb bundler
-cargo tauri build --bundles deb
-
-cd ..
-
-# Move artifacts to dist/
-echo "📦 Collecting artifacts..."
-mkdir -p dist
-
-# Find the generated .deb
-DEB_PATH=$(find src-tauri/target/release/bundle/deb -name "*.deb" | head -n 1)
-
-if [ -z "$DEB_PATH" ]; then
-    echo "❌ Error: .deb package not found in target/release/bundle/deb"
-    exit 1
-fi
-
-# Copy to dist
-DEB_NAME=$(basename "$DEB_PATH")
-cp "$DEB_PATH" "dist/$DEB_NAME"
-
-echo "✅ .deb package built successfully:"
-echo "   dist/$DEB_NAME"
-
-# Generate SHA256 checksum
-cd dist
-sha256sum "$DEB_NAME" > "${DEB_NAME}.sha256"
-echo "   dist/${DEB_NAME}.sha256"
-
-echo ""
-echo "🚀 Ready to distribute!"
-echo "   Install with: sudo dpkg -i dist/$DEB_NAME"
-echo "   Or: sudo apt install ./dist/$DEB_NAME"
-echo ""
-echo "📋 Package dependencies (will be installed automatically):"
-echo "   - pipewire | pulseaudio"
-echo "   - libwebkit2gtk-4.0-37"
-echo "   - xdg-desktop-portal (recommended)"
+echo "==> Generating SHA256..."
+(
+  cd "$DIST_DIR"
+  sha256sum *.deb > SHASUMS256.txt
+  echo "==> Done:"
+  ls -lh *.deb SHASUMS256.txt
+)

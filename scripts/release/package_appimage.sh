@@ -1,23 +1,25 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# REL-002: AppImage build (Linux-first)
-# Requires: linuxdeploy, appimagetool OR tauri-bundler (recommended)
+# REL-002B: AppImage build via Tauri bundler
+# Requires: @tauri-apps/cli, system deps (webkit2gtk, gtk3, etc.)
 # Output: dist/Emberleaf-x86_64.AppImage + SHASUMS256.txt
 
 APP_NAME="Emberleaf"
-DIST_DIR="dist"
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+DIST_DIR="$ROOT/dist"
+BUNDLE_DIR="$ROOT/src-tauri/target/release/bundle/appimage"
+
 mkdir -p "$DIST_DIR"
 
-echo "==> Building AppImage..."
-# If using tauri-bundler (preferred):
-#   npm run tauri build -- --bundles appimage
-# For a pure AppImage toolchain, hook linuxdeploy here.
+echo "==> Building AppImage via Tauri bundler"
+cd "$ROOT"
+npm run tauri build -- --bundles appimage
 
-# Placeholder: ensure a file exists for CI wiring
-touch "${DIST_DIR}/${APP_NAME}-x86_64.AppImage"
+echo "==> Collecting artifacts"
+cp -v "$BUNDLE_DIR"/*.AppImage "$DIST_DIR/"
 
-echo "==> Generating SHA256..."
+echo "==> Generating SHA256"
 (
   cd "$DIST_DIR"
   sha256sum *.AppImage > SHASUMS256.txt

@@ -51,8 +51,8 @@ impl KwsRegistry {
         let content = fs::read_to_string(registry_path)
             .with_context(|| format!("Failed to read registry: {}", registry_path.display()))?;
 
-        let registry: KwsRegistry = serde_json::from_str(&content)
-            .context("Failed to parse KWS registry JSON")?;
+        let registry: KwsRegistry =
+            serde_json::from_str(&content).context("Failed to parse KWS registry JSON")?;
 
         log::info!("KWS registry loaded: {} models", registry.models.len());
         Ok(registry)
@@ -115,19 +115,14 @@ impl ModelManager {
 
     /// Validate download URL (must be from allowed hosts)
     pub fn validate_url(url: &str) -> Result<()> {
-        let parsed =
-            url::Url::parse(url).context("Invalid URL")?;
+        let parsed = url::Url::parse(url).context("Invalid URL")?;
 
         let host = parsed
             .host_str()
             .ok_or_else(|| anyhow!("URL has no host"))?;
 
         if !ALLOWED_HOSTS.contains(&host) {
-            bail!(
-                "URL host '{}' not in allowlist: {:?}",
-                host,
-                ALLOWED_HOSTS
-            );
+            bail!("URL host '{}' not in allowlist: {:?}", host, ALLOWED_HOSTS);
         }
 
         Ok(())
@@ -151,7 +146,10 @@ impl ModelManager {
         let required_files = ["encoder", "decoder", "joiner", "tokens"];
         for prefix in &required_files {
             let pattern = if *prefix == "tokens" { ".txt" } else { ".onnx" };
-            if !self.find_file_by_pattern(&model_dir, prefix, pattern)?.is_some() {
+            if !self
+                .find_file_by_pattern(&model_dir, prefix, pattern)?
+                .is_some()
+            {
                 return Ok(false);
             }
         }
@@ -167,12 +165,7 @@ impl ModelManager {
     }
 
     /// Find a file in directory by pattern (e.g., "encoder" + ".onnx")
-    fn find_file_by_pattern(
-        &self,
-        dir: &Path,
-        prefix: &str,
-        ext: &str,
-    ) -> Result<Option<PathBuf>> {
+    fn find_file_by_pattern(&self, dir: &Path, prefix: &str, ext: &str) -> Result<Option<PathBuf>> {
         if !dir.exists() {
             return Ok(None);
         }
@@ -208,9 +201,8 @@ impl ModelManager {
         for prefix in &files {
             let ext = if *prefix == "tokens" { ".txt" } else { ".onnx" };
             if let Some(file_path) = self.find_file_by_pattern(&model_dir, prefix, ext)? {
-                let content = fs::read(&file_path).with_context(|| {
-                    format!("Failed to read file: {}", file_path.display())
-                })?;
+                let content = fs::read(&file_path)
+                    .with_context(|| format!("Failed to read file: {}", file_path.display()))?;
                 hasher.update(&content);
             } else {
                 log::warn!("Missing file for pattern: {}{}", prefix, ext);
@@ -223,11 +215,7 @@ impl ModelManager {
     }
 
     /// Download model with progress tracking
-    pub async fn download_model(
-        &self,
-        app_handle: &AppHandle,
-        model_id: &str,
-    ) -> Result<()> {
+    pub async fn download_model(&self, app_handle: &AppHandle, model_id: &str) -> Result<()> {
         Self::validate_model_id(model_id)?;
 
         let registry = self.registry()?;
@@ -240,8 +228,9 @@ impl ModelManager {
         log::info!("Downloading model '{}' from {}", model_id, entry.url);
 
         let model_dir = self.model_dir(model_id);
-        fs::create_dir_all(&model_dir)
-            .with_context(|| format!("Failed to create model directory: {}", model_dir.display()))?;
+        fs::create_dir_all(&model_dir).with_context(|| {
+            format!("Failed to create model directory: {}", model_dir.display())
+        })?;
 
         // Download the model archive (assuming it's a tarball or zip)
         let client = reqwest::Client::new();
@@ -260,11 +249,7 @@ impl ModelManager {
         let mut buffer = Vec::new();
 
         // Download with progress tracking
-        while let Some(chunk) = response
-            .chunk()
-            .await
-            .context("Failed to read chunk")?
-        {
+        while let Some(chunk) = response.chunk().await.context("Failed to read chunk")? {
             buffer.extend_from_slice(&chunk);
             downloaded += chunk.len() as u64;
 
@@ -351,10 +336,9 @@ mod tests {
     #[test]
     fn test_validate_url() {
         assert!(ModelManager::validate_url("https://github.com/user/repo/model.tar.gz").is_ok());
-        assert!(
-            ModelManager::validate_url("https://huggingface.co/models/model.tar.gz").is_ok()
-        );
+        assert!(ModelManager::validate_url("https://huggingface.co/models/model.tar.gz").is_ok());
         assert!(ModelManager::validate_url("https://evil.com/model.tar.gz").is_err());
-        assert!(ModelManager::validate_url("ftp://github.com/model.tar.gz").is_ok()); // URL parsing allows this
+        assert!(ModelManager::validate_url("ftp://github.com/model.tar.gz").is_ok());
+        // URL parsing allows this
     }
 }

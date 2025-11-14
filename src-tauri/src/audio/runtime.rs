@@ -68,7 +68,9 @@ impl AudioRuntime {
                                     audio_cfg,
                                 ) {
                                     Ok(stub_worker) => {
-                                        log::info!("✓ Audio runtime started with stub KWS (fallback)");
+                                        log::info!(
+                                            "✓ Audio runtime started with stub KWS (fallback)"
+                                        );
                                         Some(stub_worker)
                                     }
                                     Err(stub_err) => {
@@ -121,13 +123,8 @@ impl AudioRuntime {
             } else {
                 // Stub mode (default)
                 log::info!("Starting stub KWS");
-                match KwsWorker::start_stub(
-                    app_handle.clone(),
-                    paths,
-                    kws_cfg,
-                    vad_cfg,
-                    audio_cfg,
-                ) {
+                match KwsWorker::start_stub(app_handle.clone(), paths, kws_cfg, vad_cfg, audio_cfg)
+                {
                     Ok(stub_worker) => {
                         log::info!("✓ Audio runtime started with stub KWS");
                         Some(stub_worker)

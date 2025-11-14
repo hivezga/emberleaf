@@ -1,5 +1,6 @@
-# Emberleaf — Local QA Helpers
+# Emberleaf — Local QA Helpers & Release Targets
 
+# QA targets
 .PHONY: qa-kws-e2e-loopback
 qa-kws-e2e-loopback:
 	@echo "Starting PipeWire/WirePlumber (local) and running harness with loopback…"
@@ -9,3 +10,15 @@ qa-kws-e2e-loopback:
 		pactl load-module module-loopback sink=qa_sink latency_msec=1 || true; \
 		xvfb-run -a node scripts/qa/run-kws-e2e.mjs \
 	'
+
+# Release targets
+.PHONY: build-appimage build-deb release-linux
+
+build-appimage:
+	scripts/release/package_appimage.sh
+
+build-deb:
+	scripts/release/package_deb.sh
+
+release-linux: build-appimage build-deb
+	@echo "Artifacts in ./dist"

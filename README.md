@@ -162,11 +162,25 @@ See `docs/BE-001-kws.md` for detailed implementation notes.
 
 ## Roadmap
 
-- [x] BE-001: Wake-word detection (KWS) foundation
-- [ ] BE-002: Speaker embedding & verification (ECAPA-TDNN)
-- [ ] BE-003: Local LLM integration (TinyLLaMA/Mistral)
-- [ ] BE-004: Text-to-Speech (TTS)
-- [ ] BE-005: Privacy-focused web search (Whoogle)
+### Completed (v0.9.0-kws1)
+
+- [x] KWS-REAL-001: Real KWS implementation with Sherpa-ONNX Zipformer
+- [x] QA-019: E2E testing harness with PipeWire loopback
+- [x] SEC-001: Input validation and security hardening
+- [x] CI/CD: Automated testing with required checks
+
+### v1.0 Packaging (Next)
+
+- [ ] **[REL-002](https://github.com/hivezga/emberleaf/issues/6)**: Linux packaging (AppImage/.deb) with first-run model bootstrap
+
+### Future
+
+- [ ] ONB-002: Onboarding wizard polish
+- [ ] KWS-REAL-002: Speaker embedding & verification (ECAPA-TDNN)
+- [ ] STT-001: Speech-to-text integration
+- [ ] TTS-001: Text-to-speech integration
+- [ ] LLM-001: Local LLM integration (TinyLLaMA/Mistral)
+- [ ] Privacy-focused web search (Whoogle)
 
 ## Troubleshooting
 

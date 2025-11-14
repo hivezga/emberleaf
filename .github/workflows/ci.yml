@@ -162,7 +162,7 @@ jobs:
   # ===== QA-019C: KWS E2E with PipeWire Loopback (Required) =====
   qa-kws-e2e-loopback:
     name: QA KWS E2E (PipeWire Loopback)
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: [test-web, check-rust]
     timeout-minutes: 8
     env:

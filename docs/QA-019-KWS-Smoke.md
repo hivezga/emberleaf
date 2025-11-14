@@ -328,6 +328,72 @@ EMB_SIM=1 node scripts/qa/run-kws-e2e.mjs
 
 ---
 
+## CI Integration (QA-019C)
+
+**GitHub Actions Job**: `qa-kws-e2e-loopback`
+
+The CI pipeline includes an automated wake-word test that runs on every PR and push to `main`/`dev`. This job:
+
+- **Runs on**: `ubuntu-22.04` with PipeWire + WirePlumber
+- **Duration**: ~3-4 minutes with caching
+- **Required**: Yes (blocks merging if it fails)
+
+### What It Does
+
+1. Installs system dependencies (PipeWire, WirePlumber, xvfb, webkit)
+2. Builds the Tauri app in debug mode
+3. Starts PipeWire + WirePlumber in a dbus session
+4. Sets up audio loopback (null-sink + loopback module)
+5. Runs E2E harness with `EMB_LOOPBACK=1` via xvfb
+6. Validates exit code: 0=pass, 1=timeout, 2=error
+
+### Local Parity
+
+Run the same test locally with:
+
+```bash
+make qa-kws-e2e-loopback
+```
+
+This uses `dbus-run-session` + `xvfb-run` to match CI conditions.
+
+### Viewing CI Logs
+
+If the job fails in CI:
+
+1. Go to **Actions** tab in GitHub
+2. Click the failing workflow run
+3. Expand **QA KWS E2E (PipeWire Loopback)** job
+4. Check **Run E2E harness (loopback)** step for harness output
+5. Look for errors in **Start PipeWire & WirePlumber** step
+
+Common CI failures:
+
+- **PipeWire not starting**: dbus session issue (rare on ubuntu-22.04)
+- **Timeout (exit 1)**: Model download slow or wake word not detected
+- **Harness error (exit 2)**: App not starting, missing deps
+
+### Caching
+
+The job caches:
+- Cargo dependencies (~200 MB)
+- npm dependencies (~100 MB)
+- **Not cached**: Downloaded KWS models (re-download each run)
+
+To enable model caching (optional):
+
+1. Add step after harness run:
+   ```yaml
+   - uses: actions/cache@v4
+     with:
+       path: ~/.local/share/emberleaf/models/kws
+       key: kws-models-${{ hashFiles('assets/registry/kws_registry.json') }}
+   ```
+
+2. Move cache step before harness run to restore cached models
+
+---
+
 ## Known Issues / Limitations
 
 - Download progress throttled to 10Hz (may appear choppy)

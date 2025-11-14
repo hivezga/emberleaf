@@ -54,7 +54,8 @@
       "Bash(git cherry-pick:*)",
       "Bash(gh run list:*)",
       "Bash(gh run watch:*)",
-      "Bash(cargo fmt:*)"
+      "Bash(cargo fmt:*)",
+      "Bash(npm run ci:test:*)"
     ],
     "deny": [],
     "ask": []

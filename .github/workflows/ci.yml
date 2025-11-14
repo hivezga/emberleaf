@@ -33,7 +33,7 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Unit tests (validation module)
-        run: cargo test -q --manifest-path src-tauri/Cargo.toml validation
+        run: cargo test -q --manifest-path src-tauri/Cargo.toml --no-default-features --tests validation
 
   # ===== Lint Job =====
   lint:
@@ -242,6 +242,9 @@ jobs:
             libgtk-3-dev \
             libayatana-appindicator3-dev \
             librsvg2-dev \
+            libglib2.0-dev \
+            libsoup-3.0-dev \
+            libssl-dev \
             patchelf \
             libasound2-dev \
             libpulse-dev

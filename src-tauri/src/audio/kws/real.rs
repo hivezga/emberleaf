@@ -2,6 +2,8 @@
 //!
 //! This module uses the actual Sherpa-ONNX keyword spotting engine with Zipformer models.
 
+#![cfg(feature = "kws_real")]
+
 use super::super::vad::{VadConfig, VoiceActivityDetector};
 use super::super::{AudioCapture, AudioConfig, AudioSource};
 use super::{KwsConfig, WakeWordEvent};
@@ -12,8 +14,8 @@ use anyhow::{bail, Context, Result};
 use std::collections::HashSet;
 use std::ffi::CString;
 use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant, SystemTime};
-use tauri::{AppHandle, Emitter, Manager};
+use std::time::{Duration, Instant};
+use tauri::{AppHandle, Emitter};
 
 /// Find a model file by pattern (e.g., "encoder*.onnx"), excluding int8 quantized versions
 fn find_model_file(model_dir: &Path, pattern_prefix: &str, extension: &str) -> Result<PathBuf> {

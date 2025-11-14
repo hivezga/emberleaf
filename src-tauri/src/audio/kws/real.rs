@@ -212,7 +212,7 @@ fn run_real_kws_worker(
         let mut missing = Vec::new();
 
         for token in &test_tokens {
-            if vocab.contains(&token.to_string()) {
+            if vocab.contains(token) {
                 found.push(*token);
             } else {
                 missing.push(*token);

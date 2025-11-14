@@ -55,7 +55,8 @@
       "Bash(gh run list:*)",
       "Bash(gh run watch:*)",
       "Bash(cargo fmt:*)",
-      "Bash(npm run ci:test:*)"
+      "Bash(npm run ci:test:*)",
+      "Bash(find:*)"
     ],
     "deny": [],
     "ask": []

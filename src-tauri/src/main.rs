@@ -360,6 +360,7 @@ async fn kws_download_model(
 
 /// Tauri command: Enable real KWS with a specific model
 #[tauri::command]
+#[cfg_attr(not(feature = "kws_real"), allow(unused_variables))]
 async fn kws_enable(
     model_id: String,
     app_handle: AppHandle,
@@ -370,7 +371,7 @@ async fn kws_enable(
 
     #[cfg(not(feature = "kws_real"))]
     {
-        return Err("Real KWS not available: app was built without kws_real feature".to_string());
+        Err("Real KWS not available: app was built without kws_real feature".to_string())
     }
 
     #[cfg(feature = "kws_real")]

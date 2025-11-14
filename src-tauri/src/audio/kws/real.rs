@@ -406,7 +406,9 @@ fn run_real_kws_worker(
                                 };
 
                                 // Emit internal event for test window checker
-                                if let Err(e) = app_handle.emit("_kws_internal_detection", &test_payload) {
+                                if let Err(e) =
+                                    app_handle.emit("_kws_internal_detection", &test_payload)
+                                {
                                     log::error!("Failed to emit internal detection event: {}", e);
                                 }
 

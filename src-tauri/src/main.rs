@@ -102,8 +102,8 @@ struct KwsTestWindow {
 
 impl KwsTestWindow {
     fn arm(&mut self, duration_ms: u32) {
-        self.expires_at = SystemTime::now()
-            .checked_add(std::time::Duration::from_millis(duration_ms as u64));
+        self.expires_at =
+            SystemTime::now().checked_add(std::time::Duration::from_millis(duration_ms as u64));
         log::info!("KWS test window armed for {}ms", duration_ms);
     }
 
@@ -164,8 +164,8 @@ async fn kws_set_sensitivity(level: String, state: State<'_, AppState>) -> Resul
 #[tauri::command]
 async fn vad_set_threshold(threshold: f32, state: State<'_, AppState>) -> Result<String, String> {
     // SEC-001: Validate input range
-    let validated_threshold = validation::validate_vad_threshold(threshold)
-        .map_err(|e| e.to_string())?;
+    let validated_threshold =
+        validation::validate_vad_threshold(threshold).map_err(|e| e.to_string())?;
 
     // Update config in memory
     {
@@ -173,7 +173,10 @@ async fn vad_set_threshold(threshold: f32, state: State<'_, AppState>) -> Result
         config.vad.threshold = validated_threshold;
     }
 
-    log::info!("VAD threshold set to: {} (not persisted)", validated_threshold);
+    log::info!(
+        "VAD threshold set to: {} (not persisted)",
+        validated_threshold
+    );
     Ok(format!(
         "VAD threshold set to: {} (call save_preferences to persist)",
         validated_threshold
@@ -200,7 +203,10 @@ async fn save_preferences(state: State<'_, AppState>) -> Result<String, String> 
         fs::set_permissions(&config_path, perms).map_err(|e| e.to_string())?;
     }
 
-    log::info!("Preferences saved to: {} (secure perms)", config_path.display());
+    log::info!(
+        "Preferences saved to: {} (secure perms)",
+        config_path.display()
+    );
     Ok(format!("Preferences saved to: {}", config_path.display()))
 }
 
@@ -219,9 +225,7 @@ async fn restart_audio_capture_internal(
     state: State<'_, AppState>,
 ) -> Result<(), String> {
     // Reuse existing restart logic but return simpler Result
-    restart_audio_capture(state, app_handle)
-        .await
-        .map(|_| ())
+    restart_audio_capture(state, app_handle).await.map(|_| ())
 }
 
 /// KWS status response
@@ -305,8 +309,14 @@ async fn kws_download_model(
 
     // Check if already downloaded
     let manager = state.model_manager.lock().await;
-    if manager.is_model_ready(&model_id).map_err(|e| e.to_string())? {
-        return Ok(format!("Model '{}' is already downloaded and verified", model_id));
+    if manager
+        .is_model_ready(&model_id)
+        .map_err(|e| e.to_string())?
+    {
+        return Ok(format!(
+            "Model '{}' is already downloaded and verified",
+            model_id
+        ));
     }
 
     log::info!("Downloading model: {}", model_id);
@@ -360,9 +370,7 @@ async fn kws_enable(
 
     #[cfg(not(feature = "kws_real"))]
     {
-        return Err(
-            "Real KWS not available: app was built without kws_real feature".to_string(),
-        );
+        return Err("Real KWS not available: app was built without kws_real feature".to_string());
     }
 
     #[cfg(feature = "kws_real")]
@@ -370,7 +378,10 @@ async fn kws_enable(
         // Check if model is ready, download if needed
         {
             let manager = state.model_manager.lock().await;
-            if !manager.is_model_ready(&model_id).map_err(|e| e.to_string())? {
+            if !manager
+                .is_model_ready(&model_id)
+                .map_err(|e| e.to_string())?
+            {
                 log::info!("Model '{}' not found, downloading...", model_id);
                 drop(manager);
 
@@ -399,10 +410,7 @@ async fn kws_enable(
 
 /// Tauri command: Disable real KWS and return to stub
 #[tauri::command]
-async fn kws_disable(
-    app_handle: AppHandle,
-    state: State<'_, AppState>,
-) -> Result<String, String> {
+async fn kws_disable(app_handle: AppHandle, state: State<'_, AppState>) -> Result<String, String> {
     // Update config to use stub
     {
         let mut config = state.config.lock().unwrap();
@@ -1026,8 +1034,8 @@ async fn play_wav_asset_once(
     }
 
     // Decode WAV file
-    let mut reader = hound::WavReader::open(&asset_path)
-        .map_err(|e| format!("Failed to open WAV: {}", e))?;
+    let mut reader =
+        hound::WavReader::open(&asset_path).map_err(|e| format!("Failed to open WAV: {}", e))?;
 
     let spec = reader.spec();
     log::info!(
@@ -1521,7 +1529,9 @@ fn setup_test_window_listener(app_handle: AppHandle) {
             };
 
             if is_armed {
-                log::info!("✓ KWS test window armed, wake word detected - emitting test pass event");
+                log::info!(
+                    "✓ KWS test window armed, wake word detected - emitting test pass event"
+                );
 
                 // Emit test pass event
                 #[derive(serde::Serialize, Clone)]

@@ -146,9 +146,9 @@ impl ModelManager {
         let required_files = ["encoder", "decoder", "joiner", "tokens"];
         for prefix in &required_files {
             let pattern = if *prefix == "tokens" { ".txt" } else { ".onnx" };
-            if !self
+            if self
                 .find_file_by_pattern(&model_dir, prefix, pattern)?
-                .is_some()
+                .is_none()
             {
                 return Ok(false);
             }

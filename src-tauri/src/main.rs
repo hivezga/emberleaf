@@ -1437,7 +1437,13 @@ fn initialize_audio_runtime(
     // Model verification for real KWS
     #[cfg(feature = "kws_real")]
     if config.kws.enabled {
-        let model_dir = paths.kws_model_dir();
+        // Get model_id from config, default to "default"
+        let model_id = config
+            .kws
+            .model_id
+            .as_deref()
+            .unwrap_or("default");
+        let model_dir = paths.kws_model_dir(model_id);
         if !model_dir.exists() {
             log::warn!("KWS model directory not found: {}", model_dir.display());
             log::warn!("Please download models to: {}", model_dir.display());

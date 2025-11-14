@@ -32,6 +32,18 @@ jobs:
             src-tauri/target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
+      - name: Install minimal system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            libsoup-3.0-dev \
+            libssl-dev \
+            libglib2.0-dev \
+            libasound2-dev
+
       - name: Unit tests (validation module)
         run: cargo test -q --manifest-path src-tauri/Cargo.toml --no-default-features --tests validation
 
@@ -76,8 +88,11 @@ jobs:
       - name: Check Rust formatting
         run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 
-      - name: Run Clippy
+      - name: Run Clippy (all features)
         run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings -A unknown-lints
+
+      - name: Run Clippy (no default features)
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --no-default-features -- -D warnings -A unknown-lints
 
   # ===== Test Web Job =====
   test-web:

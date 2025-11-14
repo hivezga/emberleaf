@@ -7,7 +7,12 @@
 //! The bindings are generated at build time by build.rs when SHERPA_ONNX_DIR is set.
 //! In development mode without Sherpa-ONNX, placeholder stubs are used.
 
-#![allow(non_snake_case, non_camel_case_types, clippy::upper_case_acronyms, dead_code)]
+#![allow(
+    non_snake_case,
+    non_camel_case_types,
+    clippy::upper_case_acronyms,
+    dead_code
+)]
 
 // Link native libraries when Sherpa-ONNX FFI is enabled
 #[cfg(feature = "kws_real")]

@@ -1,11 +1,9 @@
-/**
- * Input Validation Module - SEC-001
- *
- * Centralized validation for all Tauri command inputs
- * Prevents injection attacks, invalid ranges, and malformed data
- *
- * Note: Contains defensive API functions reserved for future use
- */
+//! Input Validation Module - SEC-001
+//!
+//! Centralized validation for all Tauri command inputs
+//! Prevents injection attacks, invalid ranges, and malformed data
+//!
+//! Note: Contains defensive API functions reserved for future use
 #![allow(dead_code)]
 
 use std::path::{Path, PathBuf};

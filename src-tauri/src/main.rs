@@ -1438,11 +1438,7 @@ fn initialize_audio_runtime(
     #[cfg(feature = "kws_real")]
     if config.kws.enabled {
         // Get model_id from config, default to "default"
-        let model_id = config
-            .kws
-            .model_id
-            .as_deref()
-            .unwrap_or("default");
+        let model_id = config.kws.model_id.as_deref().unwrap_or("default");
         let model_dir = paths.kws_model_dir(model_id);
         if !model_dir.exists() {
             log::warn!("KWS model directory not found: {}", model_dir.display());

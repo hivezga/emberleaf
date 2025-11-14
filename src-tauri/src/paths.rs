@@ -102,11 +102,13 @@ impl AppPaths {
     }
 
     /// Get path to KWS models root directory
+    #[allow(dead_code)]
     pub fn kws_models_root(&self) -> PathBuf {
         self.models_dir().join("kws")
     }
 
     /// Get path to a specific KWS model directory by model_id
+    #[allow(dead_code)]
     pub fn kws_model_dir(&self, model_id: &str) -> PathBuf {
         self.kws_models_root().join(model_id)
     }

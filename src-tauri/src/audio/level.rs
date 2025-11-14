@@ -8,6 +8,7 @@ use tauri::{AppHandle, Emitter};
 ///
 /// The RMS is normalized such that ~0.20 RMS ≈ strong speech,
 /// values are soft-clipped to [0.0, 1.0] range.
+#[allow(dead_code)]
 pub fn emit_rms(app: &AppHandle, frame: &[f32]) {
     if frame.is_empty() {
         let _ = app.emit("audio:rms", 0.0f32);

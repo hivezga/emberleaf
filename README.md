@@ -1,5 +1,8 @@
 # Emberleaf
 
+[![CI/CD](https://img.shields.io/github/actions/workflow/status/hivezga/emberleaf/ci.yml?branch=main&label=CI/CD)](https://github.com/hivezga/emberleaf/actions/workflows/ci.yml)
+[![KWS E2E](https://img.shields.io/github/actions/workflow/status/hivezga/emberleaf/ci.yml?branch=main&label=KWS%20E2E)](https://github.com/hivezga/emberleaf/actions/workflows/ci.yml)
+
 A fully private, offline, open-source voice assistant powered by Sherpa-ONNX and built with Rust + Tauri.
 
 ## Features

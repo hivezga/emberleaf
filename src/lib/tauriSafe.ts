@@ -356,3 +356,166 @@ export async function subscribeGlobalErrors() {
   });
   subscribed = true;
 }
+
+// ===== KWS (KEYWORD SPOTTING) MANAGEMENT =====
+
+export interface KwsStatus {
+  mode: "stub" | "real";
+  model_id?: string;
+  keyword: string;
+  lang?: string;
+  enabled: boolean;
+}
+
+export interface KwsModelEntry {
+  url: string;
+  sha256: string;
+  size: number;
+  lang: string;
+  wakeword: string;
+  description: string;
+}
+
+export async function kwsStatus(): Promise<KwsStatus> {
+  if (!(await isTauriEnv())) {
+    return {
+      mode: "stub",
+      keyword: "hey ember",
+      enabled: true,
+    };
+  }
+  return tauriInvoke<KwsStatus>("kws_status");
+}
+
+export async function kwsListModels(): Promise<KwsModelEntry[]> {
+  if (!(await isTauriEnv())) {
+    return [
+      {
+        url: "https://example.com/model1.tar.gz",
+        sha256: "abc123",
+        size: 4200000,
+        lang: "en",
+        wakeword: "hey ember",
+        description: "gigaspeech-en-3.3M (English model)",
+      },
+      {
+        url: "https://example.com/model2.tar.gz",
+        sha256: "def456",
+        size: 4300000,
+        lang: "es",
+        wakeword: "hola ember",
+        description: "spanish-model (Spanish model)",
+      },
+    ];
+  }
+  return tauriInvoke<KwsModelEntry[]>("kws_list_models");
+}
+
+export async function kwsDownloadModel(modelId: string): Promise<string> {
+  if (!(await isTauriEnv())) {
+    return `[Web] Would download model: ${modelId}`;
+  }
+  return tauriInvoke<string>("kws_download_model", { modelId });
+}
+
+export async function kwsEnable(modelId: string): Promise<string> {
+  if (!(await isTauriEnv())) {
+    return `[Web] Would enable KWS with model: ${modelId}`;
+  }
+  return tauriInvoke<string>("kws_enable", { modelId });
+}
+
+export async function kwsDisable(): Promise<string> {
+  if (!(await isTauriEnv())) {
+    return "[Web] Would disable KWS (return to stub)";
+  }
+  return tauriInvoke<string>("kws_disable");
+}
+
+export async function kwsArmTestWindow(durationMs: number): Promise<string> {
+  if (!(await isTauriEnv())) {
+    return `[Web] Would arm test window for ${durationMs}ms`;
+  }
+  return tauriInvoke<string>("kws_arm_test_window", { durationMs });
+}
+
+export async function isPipewireLoopback(): Promise<boolean> {
+  if (!(await isTauriEnv())) {
+    return false; // Web mode has no loopback
+  }
+  return tauriInvoke<boolean>("is_pipewire_loopback");
+}
+
+// ===== KWS EVENT SUBSCRIPTIONS =====
+
+export interface KwsDownloadProgress {
+  model_id: string;
+  downloaded: number;
+  total: number;
+  percent: number;
+}
+
+export interface KwsTestPassPayload {
+  model_id: string;
+  keyword: string;
+  ts: number;
+}
+
+export interface KwsEventHandlers {
+  onDownloadProgress?: (progress: KwsDownloadProgress) => void;
+  onModelVerified?: (modelId: string) => void;
+  onModelVerifyFailed?: (modelId: string) => void;
+  onEnabled?: (modelId: string) => void;
+  onDisabled?: () => void;
+  onWakeTestPass?: (payload: KwsTestPassPayload) => void;
+}
+
+let kwsSubscribed = false;
+
+/**
+ * Subscribe to KWS events
+ * Should be called once when KWS UI is mounted
+ */
+export async function subscribeKwsEvents(handlers: KwsEventHandlers) {
+  if (kwsSubscribed || !(await isTauriEnv())) return;
+
+  const { listen } = await import("@tauri-apps/api/event");
+
+  if (handlers.onDownloadProgress) {
+    await listen<KwsDownloadProgress>("kws:model_download_progress", (e) => {
+      handlers.onDownloadProgress?.(e.payload);
+    });
+  }
+
+  if (handlers.onModelVerified) {
+    await listen<string>("kws:model_verified", (e) => {
+      handlers.onModelVerified?.(e.payload);
+    });
+  }
+
+  if (handlers.onModelVerifyFailed) {
+    await listen<string>("kws:model_verify_failed", (e) => {
+      handlers.onModelVerifyFailed?.(e.payload);
+    });
+  }
+
+  if (handlers.onEnabled) {
+    await listen<string>("kws:enabled", (e) => {
+      handlers.onEnabled?.(e.payload);
+    });
+  }
+
+  if (handlers.onDisabled) {
+    await listen("kws:disabled", () => {
+      handlers.onDisabled?.();
+    });
+  }
+
+  if (handlers.onWakeTestPass) {
+    await listen<KwsTestPassPayload>("kws:wake_test_pass", (e) => {
+      handlers.onWakeTestPass?.(e.payload);
+    });
+  }
+
+  kwsSubscribed = true;
+}

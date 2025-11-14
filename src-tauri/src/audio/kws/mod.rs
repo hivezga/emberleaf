@@ -21,6 +21,7 @@ cfg_if::cfg_if! {
 }
 
 /// Unified KWS worker that can hold either real or stub implementation
+#[allow(dead_code)]
 pub enum KwsWorker {
     #[cfg(feature = "kws_real")]
     Real(real::KwsWorker),
@@ -29,6 +30,7 @@ pub enum KwsWorker {
 
 impl KwsWorker {
     /// Start the appropriate KWS worker based on configuration
+    #[allow(dead_code)]
     pub fn start(
         app_handle: tauri::AppHandle,
         paths: crate::paths::AppPaths,
@@ -38,8 +40,20 @@ impl KwsWorker {
     ) -> anyhow::Result<Self> {
         #[cfg(feature = "kws_real")]
         {
-            real::KwsWorker::start(app_handle, paths, config, vad_config, audio_config)
-                .map(KwsWorker::Real)
+            // Extract model_id from config, default to "default" if not set
+            let model_id = config
+                .model_id
+                .clone()
+                .unwrap_or_else(|| "default".to_string());
+            real::KwsWorker::start(
+                app_handle,
+                paths,
+                config,
+                vad_config,
+                audio_config,
+                model_id,
+            )
+            .map(KwsWorker::Real)
         }
         #[cfg(not(feature = "kws_real"))]
         {
@@ -71,6 +85,16 @@ pub struct KwsConfig {
     pub provider: String,
     pub max_active_paths: usize,
     pub enabled: bool,
+    /// Model ID for real KWS (None = use stub)
+    #[serde(default)]
+    pub model_id: Option<String>,
+    /// Current mode: "stub" or "real"
+    #[serde(default = "default_mode")]
+    pub mode: String,
+}
+
+fn default_mode() -> String {
+    "stub".to_string()
 }
 
 impl Default for KwsConfig {
@@ -83,6 +107,8 @@ impl Default for KwsConfig {
             provider: "cpu".to_string(),
             max_active_paths: 4,
             enabled: true,
+            model_id: None,
+            mode: "stub".to_string(),
         }
     }
 }

@@ -1,3 +1,7 @@
+//! Model registry with SHA-256 verification and Ed25519 signatures
+//! Contains defensive API functions reserved for future verification features
+#![allow(dead_code)]
+
 use anyhow::{anyhow, bail, Context, Result};
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use serde::{Deserialize, Serialize};
@@ -19,6 +23,7 @@ pub enum VerificationState {
     /// File not in registry (allowed only in dev mode or with env var)
     Unknown,
     /// Hash mismatch - file modified or corrupted
+    #[allow(dead_code)]
     Mismatch { expected: String, actual: String },
 }
 

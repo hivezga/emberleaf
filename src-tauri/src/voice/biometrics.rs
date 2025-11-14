@@ -1,3 +1,8 @@
+//! Speaker biometrics with ECAPA-TDNN embeddings (future feature)
+//! Contains placeholder structs and fields for upcoming biometric verification
+#![allow(dead_code)]
+#![allow(unused_imports)]
+
 #[cfg(feature = "kws_real")]
 use crate::ffi::sherpa_onnx_bindings::*;
 use anyhow::{bail, Context, Result};
@@ -192,7 +197,7 @@ impl SpeakerBiometrics {
             OsRng.fill_bytes(&mut *key_array);
 
             // Save key (with restrictive permissions)
-            fs::write(&key_path, &*key_array).context("Failed to write encryption key")?;
+            fs::write(&key_path, *key_array).context("Failed to write encryption key")?;
 
             #[cfg(unix)]
             {
@@ -349,11 +354,7 @@ impl SpeakerBiometrics {
     fn decrypt_embedding(&self, encrypted: &EncryptedVoiceprint) -> Result<Vec<f32>> {
         let cipher = XChaCha20Poly1305::new((&*self.encryption_key).into());
 
-        let nonce: &XNonce = encrypted
-            .nonce
-            .as_slice()
-            .try_into()
-            .map_err(|_| anyhow::anyhow!("Invalid nonce length"))?;
+        let nonce: &XNonce = encrypted.nonce.as_slice().into();
 
         // Decrypt
         let plaintext = cipher

@@ -1,9 +1,10 @@
-/**
- * Input Validation Module - SEC-001
- *
- * Centralized validation for all Tauri command inputs
- * Prevents injection attacks, invalid ranges, and malformed data
- */
+//! Input Validation Module - SEC-001
+//!
+//! Centralized validation for all Tauri command inputs
+//! Prevents injection attacks, invalid ranges, and malformed data
+//!
+//! Note: Contains defensive API functions reserved for future use
+#![allow(dead_code)]
 
 use std::path::{Path, PathBuf};
 use tauri::Emitter;
@@ -89,7 +90,9 @@ pub fn validate_device_name(name: &str) -> Result<String, ValidationError> {
 pub fn validate_path(path: &str, allowed_base: &Path) -> Result<PathBuf, ValidationError> {
     // Reject empty paths
     if path.is_empty() {
-        return Err(ValidationError::InvalidPath("Path cannot be empty".to_string()));
+        return Err(ValidationError::InvalidPath(
+            "Path cannot be empty".to_string(),
+        ));
     }
 
     // Reject paths with null bytes
@@ -104,41 +107,40 @@ pub fn validate_path(path: &str, allowed_base: &Path) -> Result<PathBuf, Validat
 
     // Canonicalize to resolve .. and symlinks (if path exists)
     // If path doesn't exist yet, validate parent
-    let canonical = if path_buf.exists() {
-        path_buf
-            .canonicalize()
-            .map_err(|e| ValidationError::InvalidPath(e.to_string()))?
-    } else {
-        // For non-existent paths, check parent and validate filename
-        if let Some(parent) = path_buf.parent() {
-            if parent.as_os_str().is_empty() {
-                // Relative path with no parent - reject
+    let canonical =
+        if path_buf.exists() {
+            path_buf
+                .canonicalize()
+                .map_err(|e| ValidationError::InvalidPath(e.to_string()))?
+        } else {
+            // For non-existent paths, check parent and validate filename
+            if let Some(parent) = path_buf.parent() {
+                if parent.as_os_str().is_empty() {
+                    // Relative path with no parent - reject
+                    return Err(ValidationError::InvalidPath(
+                        "Relative paths not allowed".to_string(),
+                    ));
+                }
+                if parent.exists() {
+                    let canonical_parent = parent
+                        .canonicalize()
+                        .map_err(|e| ValidationError::InvalidPath(e.to_string()))?;
+                    canonical_parent.join(path_buf.file_name().ok_or_else(|| {
+                        ValidationError::InvalidPath("Invalid filename".to_string())
+                    })?)
+                } else {
+                    // Parent doesn't exist - validate it's not trying traversal
+                    if path.contains("..") {
+                        return Err(ValidationError::PathTraversal);
+                    }
+                    path_buf
+                }
+            } else {
                 return Err(ValidationError::InvalidPath(
-                    "Relative paths not allowed".to_string(),
+                    "Invalid path structure".to_string(),
                 ));
             }
-            if parent.exists() {
-                let canonical_parent = parent
-                    .canonicalize()
-                    .map_err(|e| ValidationError::InvalidPath(e.to_string()))?;
-                canonical_parent.join(
-                    path_buf
-                        .file_name()
-                        .ok_or_else(|| ValidationError::InvalidPath("Invalid filename".to_string()))?,
-                )
-            } else {
-                // Parent doesn't exist - validate it's not trying traversal
-                if path.contains("..") {
-                    return Err(ValidationError::PathTraversal);
-                }
-                path_buf
-            }
-        } else {
-            return Err(ValidationError::InvalidPath(
-                "Invalid path structure".to_string(),
-            ));
-        }
-    };
+        };
 
     // Ensure path is within allowed base directory
     if !canonical.starts_with(allowed_base) {
@@ -207,11 +209,7 @@ pub fn validate_opt_device_name(name: &Option<String>) -> Result<(), ValidationE
 }
 
 /// Validate device ID components (host_api, index, name)
-pub fn validate_device_id(
-    host_api: &str,
-    index: i32,
-    name: &str,
-) -> Result<(), ValidationError> {
+pub fn validate_device_id(host_api: &str, index: i32, name: &str) -> Result<(), ValidationError> {
     // Validate host API identifier (simple alphanumeric token)
     if host_api.is_empty() || host_api.len() > 64 {
         return Err(ValidationError::InvalidFormat(
@@ -268,9 +266,9 @@ pub fn validate_vad_mode(mode: &str) -> Result<String, ValidationError> {
 
 #[derive(serde::Serialize, Debug, Clone)]
 pub struct ValidationErrorPayload<'a> {
-    pub code: &'a str,        // e.g., "invalid_gain", "invalid_device_name"
-    pub message: &'a str,     // short, user-friendly
-    pub field: &'a str,       // e.g., "gain", "device_name"
+    pub code: &'a str,    // e.g., "invalid_gain", "invalid_device_name"
+    pub message: &'a str, // short, user-friendly
+    pub field: &'a str,   // e.g., "gain", "device_name"
     #[serde(skip_serializing_if = "Option::is_none")]
     pub value: Option<serde_json::Value>,
 }

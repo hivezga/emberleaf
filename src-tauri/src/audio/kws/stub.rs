@@ -109,7 +109,7 @@ fn run_stub_kws_worker(
 
             // Trigger detection on sustained high energy
             if high_energy_count >= min_energy_frames {
-                let score = (energy / energy_threshold).min(1.0).max(0.0);
+                let score = (energy / energy_threshold).clamp(0.0, 1.0);
 
                 if score >= config.score_threshold {
                     log::info!(
@@ -133,7 +133,7 @@ fn run_stub_kws_worker(
                 }
             }
 
-            if frame_count % 100 == 0 {
+            if frame_count.is_multiple_of(100) {
                 log::trace!("[STUB] Processed {} frames", frame_count);
             }
         } else {

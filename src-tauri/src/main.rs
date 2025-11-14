@@ -4,6 +4,7 @@
 mod audio;
 mod display_backend;
 mod ffi;
+mod model_manager;
 mod paths;
 mod preflight;
 mod registry;
@@ -92,6 +93,33 @@ impl AppConfig {
     }
 }
 
+/// KWS test window state (for QA-019 wake word testing)
+#[derive(Debug, Default)]
+struct KwsTestWindow {
+    /// Test window expiration time (None = not armed)
+    expires_at: Option<SystemTime>,
+}
+
+impl KwsTestWindow {
+    fn arm(&mut self, duration_ms: u32) {
+        self.expires_at =
+            SystemTime::now().checked_add(std::time::Duration::from_millis(duration_ms as u64));
+        log::info!("KWS test window armed for {}ms", duration_ms);
+    }
+
+    fn is_armed(&self) -> bool {
+        if let Some(expires_at) = self.expires_at {
+            SystemTime::now() < expires_at
+        } else {
+            false
+        }
+    }
+
+    fn disarm(&mut self) {
+        self.expires_at = None;
+    }
+}
+
 /// Application state
 struct AppState {
     paths: AppPaths,
@@ -99,12 +127,15 @@ struct AppState {
     audio_runtime: Arc<Mutex<Option<AudioRuntime>>>,
     speaker_biometrics: Arc<Mutex<Option<SpeakerBiometrics>>>,
     mic_monitor: Arc<Mutex<Option<MicMonitor>>>,
+    model_manager: Arc<tokio::sync::Mutex<model_manager::ModelManager>>,
     /// Reentrancy guard for restart_audio_capture
     restart_in_progress: AtomicBool,
     /// Remember if monitor was active before restart (for resume)
     monitor_was_active: Arc<Mutex<bool>>,
     /// Last restart timestamp (milliseconds since UNIX epoch)
     last_restart_ms: Arc<Mutex<u64>>,
+    /// KWS test window for QA-019 automated testing
+    kws_test_window: Arc<Mutex<KwsTestWindow>>,
 }
 
 /// Tauri command: Set KWS sensitivity (runtime only, not persisted)
@@ -133,8 +164,8 @@ async fn kws_set_sensitivity(level: String, state: State<'_, AppState>) -> Resul
 #[tauri::command]
 async fn vad_set_threshold(threshold: f32, state: State<'_, AppState>) -> Result<String, String> {
     // SEC-001: Validate input range
-    let validated_threshold = validation::validate_vad_threshold(threshold)
-        .map_err(|e| e.to_string())?;
+    let validated_threshold =
+        validation::validate_vad_threshold(threshold).map_err(|e| e.to_string())?;
 
     // Update config in memory
     {
@@ -142,7 +173,10 @@ async fn vad_set_threshold(threshold: f32, state: State<'_, AppState>) -> Result
         config.vad.threshold = validated_threshold;
     }
 
-    log::info!("VAD threshold set to: {} (not persisted)", validated_threshold);
+    log::info!(
+        "VAD threshold set to: {} (not persisted)",
+        validated_threshold
+    );
     Ok(format!(
         "VAD threshold set to: {} (call save_preferences to persist)",
         validated_threshold
@@ -169,7 +203,10 @@ async fn save_preferences(state: State<'_, AppState>) -> Result<String, String> 
         fs::set_permissions(&config_path, perms).map_err(|e| e.to_string())?;
     }
 
-    log::info!("Preferences saved to: {} (secure perms)", config_path.display());
+    log::info!(
+        "Preferences saved to: {} (secure perms)",
+        config_path.display()
+    );
     Ok(format!("Preferences saved to: {}", config_path.display()))
 }
 
@@ -178,6 +215,270 @@ async fn save_preferences(state: State<'_, AppState>) -> Result<String, String> 
 async fn kws_enabled(state: State<'_, AppState>) -> Result<bool, String> {
     let config = state.config.lock().unwrap();
     Ok(config.kws.enabled)
+}
+
+// ===== KWS MODEL MANAGEMENT COMMANDS =====
+
+/// Helper function to restart audio capture (internal use)
+async fn restart_audio_capture_internal(
+    app_handle: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    // Reuse existing restart logic but return simpler Result
+    restart_audio_capture(state, app_handle).await.map(|_| ())
+}
+
+/// KWS status response
+#[derive(Debug, Clone, Serialize)]
+struct KwsStatus {
+    mode: String,
+    model_id: Option<String>,
+    keyword: String,
+    lang: Option<String>,
+    enabled: bool,
+}
+
+/// Tauri command: Get KWS status
+#[tauri::command]
+async fn kws_status(state: State<'_, AppState>) -> Result<KwsStatus, String> {
+    // Clone config data first (don't hold lock across await)
+    let (mode, model_id_opt, keyword, enabled) = {
+        let config = state.config.lock().unwrap();
+        (
+            config.kws.mode.clone(),
+            config.kws.model_id.clone(),
+            config.kws.keyword.clone(),
+            config.kws.enabled,
+        )
+    };
+
+    // Get model info if available (can await now)
+    let lang = if let Some(ref model_id) = model_id_opt {
+        let manager = state.model_manager.lock().await;
+        if let Ok(registry) = manager.registry() {
+            registry.get_model(model_id).map(|e| e.lang.clone())
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    Ok(KwsStatus {
+        mode,
+        model_id: model_id_opt,
+        keyword,
+        lang,
+        enabled,
+    })
+}
+
+/// Tauri command: List available KWS models from registry
+#[tauri::command]
+async fn kws_list_models(
+    state: State<'_, AppState>,
+) -> Result<Vec<model_manager::KwsModelEntry>, String> {
+    let manager = state.model_manager.lock().await;
+    let registry = manager.registry().map_err(|e| e.to_string())?;
+
+    let mut models: Vec<_> = registry
+        .models
+        .iter()
+        .map(|(id, entry)| {
+            let mut e = entry.clone();
+            e.description = format!("{} ({})", id, e.description);
+            e
+        })
+        .collect();
+
+    // Sort by language and wakeword
+    models.sort_by(|a, b| a.lang.cmp(&b.lang).then(a.wakeword.cmp(&b.wakeword)));
+
+    Ok(models)
+}
+
+/// Tauri command: Download a KWS model (without enabling)
+#[tauri::command]
+async fn kws_download_model(
+    model_id: String,
+    app_handle: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    // Validate model_id
+    model_manager::ModelManager::validate_model_id(&model_id).map_err(|e| e.to_string())?;
+
+    // Check if already downloaded
+    let manager = state.model_manager.lock().await;
+    if manager
+        .is_model_ready(&model_id)
+        .map_err(|e| e.to_string())?
+    {
+        return Ok(format!(
+            "Model '{}' is already downloaded and verified",
+            model_id
+        ));
+    }
+
+    log::info!("Downloading model: {}", model_id);
+
+    // Download model
+    manager
+        .download_model(&app_handle, &model_id)
+        .await
+        .map_err(|e| {
+            let error_msg = format!("Model download failed: {}", e);
+            log::error!("{}", error_msg);
+            let _ = app_handle.emit("audio:error", error_msg.clone());
+            error_msg
+        })?;
+
+    // Verify model
+    let registry = manager.registry().map_err(|e| e.to_string())?;
+    let entry = registry
+        .get_model(&model_id)
+        .ok_or_else(|| format!("Model '{}' not found in registry", model_id))?;
+
+    let is_valid = manager
+        .verify_model(&model_id, &entry.sha256)
+        .map_err(|e| e.to_string())?;
+
+    if !is_valid {
+        // Verification failed - remove corrupted model
+        manager.remove_model(&model_id).ok();
+        let error_msg = format!("Model verification failed for '{}'", model_id);
+        log::error!("{}", error_msg);
+        let _ = app_handle.emit("kws:model_verify_failed", &model_id);
+        let _ = app_handle.emit("audio:error", error_msg.clone());
+        return Err(error_msg);
+    }
+
+    log::info!("Model '{}' verified successfully", model_id);
+    let _ = app_handle.emit("kws:model_verified", &model_id);
+
+    Ok(format!("Model '{}' downloaded and verified", model_id))
+}
+
+/// Tauri command: Enable real KWS with a specific model
+#[tauri::command]
+#[cfg_attr(not(feature = "kws_real"), allow(unused_variables))]
+async fn kws_enable(
+    model_id: String,
+    app_handle: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    // Validate model_id
+    model_manager::ModelManager::validate_model_id(&model_id).map_err(|e| e.to_string())?;
+
+    #[cfg(not(feature = "kws_real"))]
+    {
+        Err("Real KWS not available: app was built without kws_real feature".to_string())
+    }
+
+    #[cfg(feature = "kws_real")]
+    {
+        // Check if model is ready, download if needed
+        {
+            let manager = state.model_manager.lock().await;
+            if !manager
+                .is_model_ready(&model_id)
+                .map_err(|e| e.to_string())?
+            {
+                log::info!("Model '{}' not found, downloading...", model_id);
+                drop(manager);
+
+                // Download and verify
+                kws_download_model(model_id.clone(), app_handle.clone(), state.clone()).await?;
+            }
+        }
+
+        // Update config
+        {
+            let mut config = state.config.lock().unwrap();
+            config.kws.model_id = Some(model_id.clone());
+            config.kws.mode = "real".to_string();
+            config.kws.enabled = true;
+        }
+
+        // Restart audio runtime with real KWS
+        restart_audio_capture_internal(app_handle.clone(), state.clone()).await?;
+
+        log::info!("Real KWS enabled with model: {}", model_id);
+        let _ = app_handle.emit("kws:enabled", &model_id);
+
+        Ok(format!("Real KWS enabled with model '{}'", model_id))
+    }
+}
+
+/// Tauri command: Disable real KWS and return to stub
+#[tauri::command]
+async fn kws_disable(app_handle: AppHandle, state: State<'_, AppState>) -> Result<String, String> {
+    // Update config to use stub
+    {
+        let mut config = state.config.lock().unwrap();
+        config.kws.mode = "stub".to_string();
+        config.kws.model_id = None;
+        config.kws.enabled = true; // Keep KWS enabled, just switch to stub
+    }
+
+    // Restart audio runtime with stub KWS
+    restart_audio_capture_internal(app_handle.clone(), state.clone()).await?;
+
+    log::info!("KWS disabled, returned to stub mode");
+    let _ = app_handle.emit("kws:disabled", ());
+
+    Ok("KWS disabled, returned to stub mode".to_string())
+}
+
+/// Tauri command: Arm KWS test window for QA-019 automated testing
+///
+/// When armed, wake word detection will emit a special `kws:wake_test_pass` event
+/// for automated test verification. Window auto-expires after duration_ms.
+#[tauri::command]
+async fn kws_arm_test_window(
+    duration_ms: u32,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    // Validate duration (max 30 seconds for safety)
+    if duration_ms > 30000 {
+        return Err("Test window duration cannot exceed 30000ms".to_string());
+    }
+
+    let mut test_window = state.kws_test_window.lock().unwrap();
+    test_window.arm(duration_ms);
+
+    Ok(format!("KWS test window armed for {}ms", duration_ms))
+}
+
+/// Tauri command: Check if PipeWire loopback is available
+///
+/// Returns true if we detect PipeWire audio server with loopback capability.
+/// This is used by the test UI to decide whether to play a sample or prompt user speech.
+#[tauri::command]
+async fn is_pipewire_loopback() -> Result<bool, String> {
+    #[cfg(target_os = "linux")]
+    {
+        // Check if PipeWire is running by looking for pw-cli or pipewire process
+        // This is a heuristic - we assume loopback is available if PipeWire is present
+        let output = std::process::Command::new("pgrep")
+            .arg("-x")
+            .arg("pipewire")
+            .output();
+
+        if let Ok(output) = output {
+            if output.status.success() && !output.stdout.is_empty() {
+                log::info!("PipeWire detected, loopback assumed available");
+                return Ok(true);
+            }
+        }
+
+        log::info!("PipeWire not detected or loopback not available");
+        Ok(false)
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    {
+        Ok(false)
+    }
 }
 
 /// Tauri command: Get current configuration
@@ -700,6 +1001,140 @@ async fn play_test_tone(
         .map_err(|e| format!("Test tone failed: {:#}", e))
 }
 
+/// Tauri command: Play a WAV asset file (QA-019 test harness)
+///
+/// Plays a bundled WAV file from `assets/audio/` directory with amplitude capping.
+/// Used by automated wake-word testing to play reference samples.
+#[tauri::command]
+async fn play_wav_asset_once(
+    name: String,
+    amplitude: Option<f32>,
+    _app: AppHandle,
+) -> Result<String, String> {
+    // SEC-001B: Validate asset name (prevent path traversal)
+    if name.contains("..") || name.contains('/') || name.contains('\\') {
+        return Err("Invalid asset name: path traversal not allowed".to_string());
+    }
+
+    if !name.ends_with(".wav") {
+        return Err("Asset must be a .wav file".to_string());
+    }
+
+    // Cap amplitude at -12 dBFS (0.25) for safety
+    let amp = amplitude.unwrap_or(0.25).min(0.25);
+
+    log::info!("Playing WAV asset: {} at amplitude {:.2}", name, amp);
+
+    // Construct path to bundled asset
+    // In dev: assets/audio/{name}
+    // In prod: bundled resources (TBD based on Tauri packaging)
+    let asset_path = std::path::PathBuf::from("assets/audio").join(&name);
+
+    if !asset_path.exists() {
+        return Err(format!("Asset not found: {}", asset_path.display()));
+    }
+
+    // Decode WAV file
+    let mut reader =
+        hound::WavReader::open(&asset_path).map_err(|e| format!("Failed to open WAV: {}", e))?;
+
+    let spec = reader.spec();
+    log::info!(
+        "WAV spec: {} Hz, {} ch, {} bits",
+        spec.sample_rate,
+        spec.channels,
+        spec.bits_per_sample
+    );
+
+    // Read all samples (assumes 16-bit PCM)
+    let samples: Vec<i16> = if spec.bits_per_sample == 16 {
+        reader
+            .samples::<i16>()
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| format!("Failed to read samples: {}", e))?
+    } else {
+        return Err(format!("Unsupported bit depth: {}", spec.bits_per_sample));
+    };
+
+    // Convert to f32 with amplitude scaling
+    let samples_f32: Vec<f32> = samples
+        .iter()
+        .map(|&s| (s as f32 / 32768.0) * amp)
+        .collect();
+
+    // Play via CPAL using a similar approach to test_tone
+    play_wav_samples_internal(None, samples_f32, spec.sample_rate, spec.channels)
+        .map_err(|e| format!("Playback failed: {}", e))?;
+
+    let duration_s = samples.len() as f32 / spec.sample_rate as f32 / spec.channels as f32;
+
+    Ok(format!(
+        "✓ Played {} ({:.1}s) at {:.0}% amplitude",
+        name,
+        duration_s,
+        amp * 100.0
+    ))
+}
+
+/// Internal helper: Play PCM samples via CPAL
+fn play_wav_samples_internal(
+    device_name: Option<String>,
+    samples: Vec<f32>,
+    sample_rate: u32,
+    channels: u16,
+) -> anyhow::Result<()> {
+    use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+
+    let host = cpal::default_host();
+
+    // Select output device
+    let device = if let Some(ref name) = device_name {
+        host.output_devices()?
+            .find(|d| d.name().map(|n| n == *name).unwrap_or(false))
+            .ok_or_else(|| anyhow::anyhow!("Output device not found: {}", name))?
+    } else {
+        host.default_output_device()
+            .ok_or_else(|| anyhow::anyhow!("No default output device available"))?
+    };
+
+    let config = cpal::StreamConfig {
+        channels,
+        sample_rate: cpal::SampleRate(sample_rate),
+        buffer_size: cpal::BufferSize::Default,
+    };
+
+    // Create a shared buffer wrapped in Arc/Mutex for thread-safe access
+    let buffer = std::sync::Arc::new(std::sync::Mutex::new(samples));
+    let buffer_clone = buffer.clone();
+    let mut position = 0usize;
+
+    let stream = device.build_output_stream(
+        &config,
+        move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
+            let buf = buffer_clone.lock().unwrap();
+            for sample in data.iter_mut() {
+                *sample = if position < buf.len() {
+                    let value = buf[position];
+                    position += 1;
+                    value
+                } else {
+                    0.0 // Silence after buffer ends
+                };
+            }
+        },
+        move |err| log::error!("WAV playback stream error: {}", err),
+        None,
+    )?;
+
+    stream.play()?;
+
+    // Calculate playback duration
+    let duration_s = buffer.lock().unwrap().len() as f32 / sample_rate as f32;
+    std::thread::sleep(std::time::Duration::from_secs_f32(duration_s + 0.1));
+
+    Ok(())
+}
+
 /// Tauri command: Start microphone monitoring
 #[tauri::command]
 async fn start_mic_monitor(
@@ -1003,7 +1438,9 @@ fn initialize_audio_runtime(
     // Model verification for real KWS
     #[cfg(feature = "kws_real")]
     if config.kws.enabled {
-        let model_dir = paths.kws_model_dir();
+        // Get model_id from config, default to "default"
+        let model_id = config.kws.model_id.as_deref().unwrap_or("default");
+        let model_dir = paths.kws_model_dir(model_id);
         if !model_dir.exists() {
             log::warn!("KWS model directory not found: {}", model_dir.display());
             log::warn!("Please download models to: {}", model_dir.display());
@@ -1067,6 +1504,65 @@ fn initialize_audio_runtime(
             Err(e)
         }
     }
+}
+
+/// QA-019: Set up test window event listener
+///
+/// Listens for internal wake word detection events from the KWS worker.
+/// If test window is armed, emits `kws:wake_test_pass` event and disarms the window.
+fn setup_test_window_listener(app_handle: AppHandle) {
+    use tauri::Listener;
+
+    #[derive(serde::Deserialize, Clone)]
+    struct TestDetectionPayload {
+        model_id: String,
+        keyword: String,
+        ts: u64,
+    }
+
+    let app_handle_clone = app_handle.clone();
+    let _ = app_handle.listen("_kws_internal_detection", move |event| {
+        if let Ok(payload) = serde_json::from_str::<TestDetectionPayload>(event.payload()) {
+            let state: State<AppState> = app_handle_clone.state();
+
+            // Check if test window is armed
+            let is_armed = {
+                let test_window = state.kws_test_window.lock().unwrap();
+                test_window.is_armed()
+            };
+
+            if is_armed {
+                log::info!(
+                    "✓ KWS test window armed, wake word detected - emitting test pass event"
+                );
+
+                // Emit test pass event
+                #[derive(serde::Serialize, Clone)]
+                struct TestPassPayload {
+                    model_id: String,
+                    keyword: String,
+                    ts: u64,
+                }
+
+                let test_pass = TestPassPayload {
+                    model_id: payload.model_id.clone(),
+                    keyword: payload.keyword.clone(),
+                    ts: payload.ts,
+                };
+
+                if let Err(e) = app_handle_clone.emit("kws:wake_test_pass", &test_pass) {
+                    log::error!("Failed to emit kws:wake_test_pass event: {}", e);
+                }
+
+                // Disarm test window
+                let mut test_window = state.kws_test_window.lock().unwrap();
+                test_window.disarm();
+                log::info!("Test window disarmed after successful detection");
+            }
+        }
+    });
+
+    log::info!("KWS test window event listener installed");
 }
 
 /// Device health watcher - monitors configured devices and handles loss/fallback
@@ -1294,6 +1790,20 @@ async fn run_app(
     paths_for_setup: AppPaths,
     config_for_setup: AppConfig,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    // Initialize model manager
+    let mut model_manager = model_manager::ModelManager::new(paths.models_dir());
+
+    // Try to load registry (non-fatal if missing)
+    let registry_path = paths.kws_registry();
+    if registry_path.exists() {
+        match model_manager.load_registry(&registry_path) {
+            Ok(()) => log::info!("KWS registry loaded successfully"),
+            Err(e) => log::warn!("Failed to load KWS registry: {}", e),
+        }
+    } else {
+        log::warn!("KWS registry not found at: {}", registry_path.display());
+    }
+
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .manage(AppState {
@@ -1302,9 +1812,11 @@ async fn run_app(
             audio_runtime: Arc::new(Mutex::new(None)),
             speaker_biometrics: Arc::new(Mutex::new(None)),
             mic_monitor: Arc::new(Mutex::new(None)),
+            model_manager: Arc::new(tokio::sync::Mutex::new(model_manager)),
             restart_in_progress: AtomicBool::new(false),
             monitor_was_active: Arc::new(Mutex::new(false)),
             last_restart_ms: Arc::new(Mutex::new(0)),
+            kws_test_window: Arc::new(Mutex::new(KwsTestWindow::default())),
         })
         .setup(move |app| {
             let app_handle = app.handle().clone();
@@ -1373,6 +1885,10 @@ async fn run_app(
 
                 // Start device health watcher
                 tokio::spawn(device_health_watcher(app_handle.clone()));
+
+                // QA-019: Set up test window event listener
+                // Listens for internal wake word detections and emits test pass events if test window is armed
+                setup_test_window_listener(app_handle.clone());
             });
 
             Ok(())
@@ -1381,6 +1897,13 @@ async fn run_app(
             preflight::run_preflight_checks,
             kws_set_sensitivity,
             kws_enabled,
+            kws_status,
+            kws_list_models,
+            kws_download_model,
+            kws_enable,
+            kws_disable,
+            kws_arm_test_window,
+            is_pipewire_loopback,
             vad_set_threshold,
             save_preferences,
             get_config,
@@ -1394,6 +1917,7 @@ async fn run_app(
             set_output_device,
             restart_audio_capture,
             play_test_tone,
+            play_wav_asset_once,
             start_mic_monitor,
             stop_mic_monitor,
             set_persist_monitor_state,

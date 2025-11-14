@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { RefreshCw, Volume2, Mic, Settings } from "lucide-react";
 import { DiagnoseAudioButton } from "./DiagnoseAudio";
+import { KwsSettings } from "./KwsSettings";
 import {
   listInputDevices,
   listOutputDevices,
@@ -190,6 +191,10 @@ export function AudioSettings() {
 
   return (
     <div className="space-y-4">
+      {/* KWS Settings */}
+      <KwsSettings />
+
+      {/* Audio Settings */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">

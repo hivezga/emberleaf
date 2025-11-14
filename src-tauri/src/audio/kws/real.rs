@@ -2,6 +2,8 @@
 //!
 //! This module uses the actual Sherpa-ONNX keyword spotting engine with Zipformer models.
 
+#![cfg(feature = "kws_real")]
+
 use super::super::vad::{VadConfig, VoiceActivityDetector};
 use super::super::{AudioCapture, AudioConfig, AudioSource};
 use super::{KwsConfig, WakeWordEvent};
@@ -122,24 +124,31 @@ impl KwsWorker {
         config: KwsConfig,
         vad_config: VadConfig,
         audio_config: AudioConfig,
+        model_id: String,
     ) -> Result<Self> {
         log::info!("Starting real KWS worker with Sherpa-ONNX v1.10.30");
+        log::info!("  Model ID: {}", model_id);
 
-        // Get model directory from injected paths (no state access)
-        let model_dir = paths.kws_model_dir();
+        // Get model directory for the specified model_id
+        let model_dir = paths.kws_model_dir(&model_id);
 
         if !model_dir.exists() {
             bail!(
-                "KWS model directory not found: {}. Run scripts/fetch_models.sh",
+                "KWS model directory not found: {}. Enable and download model first.",
                 model_dir.display()
             );
         }
 
         // Spawn worker thread (std::thread to avoid Send issues with FFI pointers)
         let handle = std::thread::spawn(move || {
-            if let Err(e) =
-                run_real_kws_worker(app_handle, config, vad_config, audio_config, model_dir)
-            {
+            if let Err(e) = run_real_kws_worker(
+                app_handle,
+                config,
+                vad_config,
+                audio_config,
+                model_dir,
+                model_id,
+            ) {
                 log::error!("Real KWS worker thread error: {}", e);
             }
         });
@@ -158,6 +167,7 @@ fn run_real_kws_worker(
     vad_config: VadConfig,
     audio_config: AudioConfig,
     model_dir: std::path::PathBuf,
+    model_id: String,
 ) -> Result<()> {
     log::info!("Initializing real KWS worker with Sherpa-ONNX");
     log::info!("  Keyword: '{}'", config.keyword);
@@ -202,6 +212,7 @@ fn run_real_kws_worker(
         let mut missing = Vec::new();
 
         for token in &test_tokens {
+            #[allow(clippy::unnecessary_to_owned)]
             if vocab.contains(&token.to_string()) {
                 found.push(*token);
             } else {
@@ -376,6 +387,34 @@ fn run_real_kws_worker(
                                     log::error!("Failed to emit wake-word event: {}", e);
                                 }
 
+                                // QA-019: Check if test window is armed and emit test pass event
+                                // We emit a separate internal event that main.rs will listen for
+                                // to check test window state and conditionally emit kws:wake_test_pass
+                                #[derive(serde::Serialize, Clone)]
+                                struct TestDetectionPayload {
+                                    model_id: String,
+                                    keyword: String,
+                                    ts: u64,
+                                }
+
+                                let ts = std::time::SystemTime::now()
+                                    .duration_since(std::time::UNIX_EPOCH)
+                                    .unwrap_or_default()
+                                    .as_millis() as u64;
+
+                                let test_payload = TestDetectionPayload {
+                                    model_id: model_id.clone(),
+                                    keyword: keyword_str.to_string(),
+                                    ts,
+                                };
+
+                                // Emit internal event for test window checker
+                                if let Err(e) =
+                                    app_handle.emit("_kws_internal_detection", &test_payload)
+                                {
+                                    log::error!("Failed to emit internal detection event: {}", e);
+                                }
+
                                 last_detection = Some(Instant::now());
                             }
                         }
@@ -404,7 +443,6 @@ fn run_real_kws_worker(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Write;
 
     #[test]
     fn test_normalize_keyword_against_vocab() {

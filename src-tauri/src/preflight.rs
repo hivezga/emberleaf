@@ -136,11 +136,11 @@ fn check_audio_stack() -> PreflightItem {
 fn check_webkit() -> PreflightItem {
     // Try to detect webkit2gtk-4.1 or 4.0
     let check_41 = Command::new("pkg-config")
-        .args(&["--modversion", "webkit2gtk-4.1"])
+        .args(["--modversion", "webkit2gtk-4.1"])
         .output();
 
     let check_40 = Command::new("pkg-config")
-        .args(&["--modversion", "webkit2gtk-4.0"])
+        .args(["--modversion", "webkit2gtk-4.0"])
         .output();
 
     if check_41.is_ok() || check_40.is_ok() {

@@ -225,8 +225,6 @@ fn build_u16_stream_direct(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn test_parameter_clamping() {
         // Test that extreme values are clamped safely

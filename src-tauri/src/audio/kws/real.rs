@@ -212,7 +212,8 @@ fn run_real_kws_worker(
         let mut missing = Vec::new();
 
         for token in &test_tokens {
-            if vocab.contains(token) {
+            #[allow(clippy::unnecessary_to_owned)]
+            if vocab.contains(&token.to_string()) {
                 found.push(*token);
             } else {
                 missing.push(*token);
@@ -442,7 +443,6 @@ fn run_real_kws_worker(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Write;
 
     #[test]
     fn test_normalize_keyword_against_vocab() {

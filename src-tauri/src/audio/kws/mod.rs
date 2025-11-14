@@ -38,8 +38,20 @@ impl KwsWorker {
     ) -> anyhow::Result<Self> {
         #[cfg(feature = "kws_real")]
         {
-            real::KwsWorker::start(app_handle, paths, config, vad_config, audio_config)
-                .map(KwsWorker::Real)
+            // Extract model_id from config, default to "default" if not set
+            let model_id = config
+                .model_id
+                .clone()
+                .unwrap_or_else(|| "default".to_string());
+            real::KwsWorker::start(
+                app_handle,
+                paths,
+                config,
+                vad_config,
+                audio_config,
+                model_id,
+            )
+            .map(KwsWorker::Real)
         }
         #[cfg(not(feature = "kws_real"))]
         {

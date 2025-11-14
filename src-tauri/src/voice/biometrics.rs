@@ -1,3 +1,7 @@
+//! Speaker biometrics with ECAPA-TDNN embeddings (future feature)
+//! Contains placeholder structs and fields for upcoming biometric verification
+#![allow(dead_code)]
+
 #[cfg(feature = "kws_real")]
 use crate::ffi::sherpa_onnx_bindings::*;
 use anyhow::{bail, Context, Result};

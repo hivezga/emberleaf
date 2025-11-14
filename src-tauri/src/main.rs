@@ -1521,7 +1521,7 @@ fn setup_test_window_listener(app_handle: AppHandle) {
 
     let app_handle_clone = app_handle.clone();
     let _ = app_handle.listen("_kws_internal_detection", move |event| {
-        if let Ok(payload) = serde_json::from_str::<TestDetectionPayload>(&event.payload()) {
+        if let Ok(payload) = serde_json::from_str::<TestDetectionPayload>(event.payload()) {
             let state: State<AppState> = app_handle_clone.state();
 
             // Check if test window is armed

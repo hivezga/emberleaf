@@ -19,6 +19,7 @@ pub enum VerificationState {
     /// File not in registry (allowed only in dev mode or with env var)
     Unknown,
     /// Hash mismatch - file modified or corrupted
+    #[allow(dead_code)]
     Mismatch { expected: String, actual: String },
 }
 

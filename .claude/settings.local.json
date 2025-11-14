@@ -56,7 +56,10 @@
       "Bash(gh run watch:*)",
       "Bash(cargo fmt:*)",
       "Bash(npm run ci:test:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(SHERPA_ONNX_DIR=\"/home/hivezga/.local/sherpa-onnx\" LD_LIBRARY_PATH=\"/home/hivezga/.local/sherpa-onnx/lib\" cargo clippy:*)",
+      "Bash(gh api:*)",
+      "Bash(gunzip:*)"
     ],
     "deny": [],
     "ask": []

@@ -79,6 +79,7 @@ impl AppPaths {
     }
 
     /// Get path to state file
+    #[allow(dead_code)]
     pub fn state_file(&self) -> PathBuf {
         self.data.join("state.toml")
     }
@@ -89,11 +90,13 @@ impl AppPaths {
     }
 
     /// Get path to model registry
+    #[allow(dead_code)]
     pub fn model_registry(&self) -> PathBuf {
         self.models_dir().join("registry.json")
     }
 
     /// Get path to model registry signature
+    #[allow(dead_code)]
     pub fn model_registry_sig(&self) -> PathBuf {
         self.models_dir().join("registry.sig")
     }
@@ -132,6 +135,7 @@ impl AppPaths {
     }
 
     /// Get path to logs directory
+    #[allow(dead_code)]
     pub fn logs_dir(&self) -> PathBuf {
         self.cache.join("logs")
     }

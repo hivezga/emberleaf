@@ -162,12 +162,14 @@ impl AudioRuntime {
     }
 
     /// Check if KWS is active
+    #[allow(dead_code)]
     pub fn has_kws(&self) -> bool {
         self.kws_worker.is_some()
     }
 }
 
 /// Helper to clone stop receiver for passing to worker threads
+#[allow(dead_code)]
 pub fn clone_stop_receiver(rx: &Receiver<StopSignal>) -> Receiver<StopSignal> {
     rx.clone()
 }

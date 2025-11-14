@@ -29,7 +29,8 @@ class LocalStorageMock {
   }
 }
 
-global.localStorage = new LocalStorageMock() as any;
+// @ts-ignore - global is available in test environment
+(globalThis as any).localStorage = new LocalStorageMock();
 
 // Mock Tauri APIs for testing environment
 vi.mock('@tauri-apps/api/event', () => ({

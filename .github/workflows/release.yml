@@ -37,16 +37,17 @@ jobs:
       - name: Build (frontend only for now)
         run: npm run build
 
-      - name: Build AppImage
-        env:
-          APPIMAGE_EXTRACT_AND_RUN: 1
-          NO_STRIP: true
-        run: scripts/release/package_appimage.sh
-
       - name: Build .deb
         env:
           APPIMAGE_EXTRACT_AND_RUN: 1
         run: scripts/release/package_deb.sh
+
+      - name: Build AppImage
+        continue-on-error: true
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: 1
+          NO_STRIP: true
+        run: scripts/release/package_appimage.sh
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

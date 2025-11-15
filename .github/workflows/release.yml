@@ -49,14 +49,28 @@ jobs:
           NO_STRIP: true
         run: scripts/release/package_appimage.sh
 
-      - name: Upload artifacts
+      - name: Collect Linux artifacts
+        run: |
+          mkdir -p dist
+          # Copy any .deb produced by Tauri
+          find src-tauri/target/release/bundle -type f -name "*.deb" -print -exec cp -v {} dist/ \;
+          # Copy AppImage too if it ever succeeds (best-effort)
+          find src-tauri/target/release/bundle -type f -name "*.AppImage" -print -exec cp -v {} dist/ \;
+          # (Re)generate checksums in case they weren't present
+          (cd dist && sha256sum * > SHASUMS256.txt 2>/dev/null || true)
+          # Show what we collected
+          ls -lh dist/ || echo "dist/ is empty"
+
+      - name: Upload artifacts to Actions
         uses: actions/upload-artifact@v4
         with:
           name: emberleaf-linux-artifacts
           path: |
-            dist/*.AppImage
             dist/*.deb
+            dist/*.AppImage
             dist/SHASUMS256.txt
+          if-no-files-found: error
+          retention-days: 14
 
   # Optional: Create GitHub Release and attach artifacts
   draft-release:
@@ -70,11 +84,15 @@ jobs:
           name: emberleaf-linux-artifacts
           path: dist
 
+      - name: List downloaded artifacts
+        run: ls -lah dist/
+
       - name: Create draft release
         uses: softprops/action-gh-release@v2
         with:
           draft: true
           files: |
-            dist/*.AppImage
             dist/*.deb
+            dist/*.AppImage
             dist/SHASUMS256.txt
+          fail_on_unmatched_files: false

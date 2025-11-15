@@ -37,9 +37,13 @@ jobs:
         run: npm run build
 
       - name: Build AppImage
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: 1
         run: scripts/release/package_appimage.sh
 
       - name: Build .deb
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: 1
         run: scripts/release/package_deb.sh
 
       - name: Upload artifacts
